@@ -41,7 +41,7 @@ pub fn main() anyerror!void {
                     running = false;
                 }
             } else {
-                std.debug.warn("Type: {}\n", event.type);
+                // std.debug.warn("Type: {}\n", event.type);
             }
         }
 
