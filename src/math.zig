@@ -1,6 +1,7 @@
 const assert = @import("std").debug.assert;
 
 pub const real = f32;
+pub const accuracy = 0.0001;
 
 const math = @import("std").math;
 
@@ -11,16 +12,16 @@ pub fn V2(x: real, y: real) Vec2 {
     };
 }
 
-pub fn V3(x: real, y: real, z: real) Vec2 {
-    return Vec2 {
+pub fn V3(x: real, y: real, z: real) Vec3 {
+    return Vec3 {
         .x = x,
         .y = y,
         .z = z,
     };
 }
 
-pub fn V4(x: real, y: real, z: real, w: real) Vec2 {
-    return Vec2 {
+pub fn V4(x: real, y: real, z: real, w: real) Vec4 {
+    return Vec4 {
         .x = x,
         .y = y,
         .z = z,
@@ -69,7 +70,7 @@ pub const Mat4 = packed struct {
                   0, 0, 0, 0);
     }
 
-    pub fn mul(self: Mat4, other: Mat4) Mat4 {
+    pub fn mulMat(self: Mat4, other: Mat4) Mat4 {
         var out: Mat4 = zero();
 
         const indicies = []u32{0, 1, 2, 3};
@@ -81,6 +82,46 @@ pub const Mat4 = packed struct {
             }
         }
         return out;
+    }
+
+    pub fn mulVec(self: Mat4, other: Vec4) Vec4 {
+        const in = []real {other.x, other.y, other.z, other.w};
+        var out = []real {0, 0, 0, 0};
+
+        const indicies = []u32{0, 1, 2, 3};
+        inline for (indicies) |row| {
+            inline for (indicies) |i| {
+                out[row] += self.v[i][row] * in[i];
+            }
+        }
+        return V4(out[0], out[1], out[2], out[3]);
+    }
+
+    pub fn transpose(self: Mat4) Mat4 {
+        var out: Mat4 = zero();
+
+        const indicies = []u32{0, 1, 2, 3};
+        inline for (indicies) |row| {
+            inline for (indicies) |col| {
+                out.v[row][col] = self.v[col][row];
+            }
+        }
+    }
+
+    pub fn equalsAcc(self: Mat4, other: Mat4, acc: real) bool {
+        const indicies = []u32{0, 1, 2, 3};
+        inline for (indicies) |row| {
+            inline for (indicies) |col| {
+                if (math.fabs(self.v[row][col] - other.v[row][col]) > acc) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    pub fn equals(self: Mat4, other: Mat4) bool {
+        return @inlineCall(equalsAcc, self, other, accuracy);
     }
 
     pub fn dump(self: Mat4) void {
@@ -97,13 +138,37 @@ pub const Mat4 = packed struct {
 
 test "Mat4" {
     const warn = @import("std").debug.warn;
-    warn("\n");
     var a = Mat4.identity();
-    a.dump();
     var b = Mat4.identity();
-    b.dump();
-    var c = a.mul(b);
-    c.dump();
+    var c = a.mulMat(b);
+    assert(c.equals(Mat4.identity()));
+
+    a = Mat4.zero();
+    c = a.mulMat(b);
+    assert(c.equals(Mat4.zero()));
+
+    a = M4(0, 1, 0, 0,
+           1, 0, 0, 0,
+           0, 0, 1, 0,
+           0, 0, 0, 0);
+    b = M4(1, 0, 1, 0,
+           1, 1, 0, 0,
+           0, 1, 1, 0,
+           0, 0, 0, 0);
+
+    c = a.mulMat(b);
+    assert(c.equals(M4(1, 1, 0, 0,
+                       1, 0, 1, 0,
+                       0, 1, 1, 0,
+                       0, 0, 0, 0)));
+    c = b.mulMat(a);
+    assert(c.equals(M4(0, 1, 1, 0,
+                       1, 1, 0, 0,
+                       1, 0, 1, 0,
+                       0, 0, 0, 0)));
+
+    var p = V4(1, 2, 3, 1);
+    assert(a.mulVec(p).equals(V4(2, 1, 3, 0)));
 }
 
 pub const Vec2 = packed struct {
@@ -176,13 +241,13 @@ pub const Vec2 = packed struct {
         return self.scale(1.0 / l);
     }
 
-    pub fn equalsAcc(self: Vec2, other: Vec2, accuracy: real) bool {
-        return math.fabs(self.x - other.x) < accuracy and 
-               math.fabs(self.y - other.y) < accuracy;
+    pub fn equalsAcc(self: Vec2, other: Vec2, acc: real) bool {
+        return math.fabs(self.x - other.x) < acc and 
+               math.fabs(self.y - other.y) < acc;
     }
 
     pub fn equals(self: Vec2, other: Vec2) bool {
-        return @inlineCall(equalsAcc, self, other, 0.001);
+        return @inlineCall(equalsAcc, self, other, accuracy);
     }
 };
 
@@ -275,14 +340,14 @@ pub const Vec3 = packed struct {
         return self.scale(1.0 / l);
     }
 
-    pub fn equalsAcc(self: Vec3, other: Vec3, accuracy: real) bool {
-        return math.fabs(self.x - other.x) < accuracy and 
-               math.fabs(self.y - other.y) < accuracy and
-               math.fabs(self.z - other.z) < accuracy;
+    pub fn equalsAcc(self: Vec3, other: Vec3, acc: real) bool {
+        return math.fabs(self.x - other.x) < acc and 
+               math.fabs(self.y - other.y) < acc and
+               math.fabs(self.z - other.z) < acc;
     }
 
     pub fn equals(self: Vec3, other: Vec3) bool {
-        return @inlineCall(equalsAcc, self, other, 0.001);
+        return @inlineCall(equalsAcc, self, other, accuracy);
     }
 };
 
@@ -351,14 +416,14 @@ pub const Vec4 = packed struct {
         return self.scale(1.0 / l);
     }
 
-    pub fn equalsAcc(self: Vec4, other: Vec4, accuracy: real) bool {
-        return math.fabs(self.x - other.x) < accuracy and 
-               math.fabs(self.y - other.y) < accuracy and
-               math.fabs(self.z - other.z) < accuracy;
+    pub fn equalsAcc(self: Vec4, other: Vec4, acc: real) bool {
+        return math.fabs(self.x - other.x) < acc and 
+               math.fabs(self.y - other.y) < acc and
+               math.fabs(self.z - other.z) < acc;
     }
 
     pub fn equals(self: Vec4, other: Vec4) bool {
-        return @inlineCall(equalsAcc, self, other, 0.001);
+        return @inlineCall(equalsAcc, self, other, accuracy);
     }
 };
 
