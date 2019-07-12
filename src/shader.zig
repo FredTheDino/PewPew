@@ -111,8 +111,22 @@ outer:
     }
 
     /// Update the uniform variables.
-    pub fn update(shader: Shader) void {
-        const loc = glGetUniformLocation(shader.program, c"time");
-        glUniform1f(loc, @intToFloat(f32, SDL_GetTicks()) / 1000.0);
+    pub fn update(shader: Shader, camera: Mat4) void {
+        {
+            const loc_t = glGetUniformLocation(shader.program, c"time");
+            glUniform1f(loc_t, @intToFloat(f32, SDL_GetTicks()) / 1000.0);
+        }
+        {
+            const loc_c = glGetUniformLocation(shader.program, c"view");
+            const c_arr: [*c]const f32 = @alignCast(4, &camera.v[0][0]);
+
+            glUniformMatrix4fv(loc_c, 1, 0, c_arr);
+        }
+    }
+
+    /// Set where to draw something.
+    pub fn draw_at(shader: Shader, position: Vec3) void {
+        const loc_p = glGetUniformLocation(shader.program, c"position");
+        glUniform3f(loc_p, position.x, position.y, position.z);
     }
 };

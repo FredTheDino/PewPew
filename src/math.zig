@@ -1,9 +1,10 @@
+// TODO: Make this into SIMD instructions.
 const assert = @import("std").debug.assert;
 
 pub const real = f32;
 pub const accuracy = 0.0001;
 
-const math = @import("std").math;
+pub const math = @import("std").math;
 
 pub fn V2(x: real, y: real) Vec2 {
     return Vec2 {
@@ -61,6 +62,64 @@ pub const Mat4 = packed struct {
                   0, 1, 0, 0,
                   0, 0, 1, 0,
                   0, 0, 0, 1);
+    }
+
+    pub fn perspective(fov: f32) Mat4 {
+        const f = 10.0; // Far clipping plane
+        const n = 0.1; // Near clipping plane
+        const s = n / math.tan(fov * (math.pi / 180.0) / 2.0);
+
+        var out = zero();
+        out.v[0][0] = s;
+        out.v[1][1] = s;
+
+        out.v[2][2] = (f + n) / (f - n);
+        out.v[2][3] = 2.0 * f * n / (f - n);
+        out.v[3][2] = 1;
+        out.v[3][3] = 0;
+
+        return out;
+    }
+
+    pub fn rotation(x: real, y: real, z: real) Mat4 {
+        var z_matrix = identity();
+        {
+            const sin_z = math.sin(z);
+            const cos_z = math.cos(z);
+            z_matrix.v[0][0] =  cos_z;
+            z_matrix.v[0][1] = -sin_z;
+            z_matrix.v[1][0] =  sin_z;
+            z_matrix.v[1][1] =  cos_z;
+        }
+
+        var y_matrix = identity();
+        {
+            const sin_y = math.sin(y);
+            const cos_y = math.cos(y);
+            y_matrix.v[0][0] =  cos_y;
+            y_matrix.v[0][2] = -sin_y;
+            y_matrix.v[2][0] =  sin_y;
+            y_matrix.v[2][2] =  cos_y;
+        }
+
+        var x_matrix = identity();
+        {
+            const sin_x = math.sin(x);
+            const cos_x = math.cos(x);
+            x_matrix.v[1][1] =  cos_x;
+            x_matrix.v[1][2] = -sin_x;
+            x_matrix.v[2][1] =  sin_x;
+            x_matrix.v[2][2] =  cos_x;
+        }
+        return z_matrix.mulMat(y_matrix.mulMat(x_matrix));
+    }
+
+    pub fn translation(movement: Vec3) Mat4 {
+        var out = identity();
+        out.v[0][3] = movement.x;
+        out.v[1][3] = movement.y;
+        out.v[2][3] = movement.z;
+        return out;
     }
 
     pub fn zero() Mat4 {

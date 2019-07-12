@@ -14,6 +14,8 @@ pub use @cImport({
 pub const std = @import("std");
 pub const assert = std.debug.assert;
 
+pub use @import("math.zig");
+
 // TODO(Ed): Replace this with something like: 
 //    var arena = std.heap.DirectAllocator.init();
 //    defer arena.deinit();
