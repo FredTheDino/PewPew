@@ -64,18 +64,22 @@ pub const Mat4 = packed struct {
                   0, 0, 0, 1);
     }
 
-    pub fn perspective(fov: f32) Mat4 {
-        const f = 10.0; // Far clipping plane
-        const n = 0.1; // Near clipping plane
-        const s = n / math.tan(fov * (math.pi / 180.0) / 2.0);
+    pub fn perspective(fov: f32, aspect_ratio: f32) Mat4 {
+        const f = 100.0; // Far clipping plane
+        const n = 1.0; // Near clipping plane
+        const t = math.tan(fov * (math.pi / 180.0) / 2.0);
+        const s = n / t; 
 
-        var out = zero();
-        out.v[0][0] = s;
+        var out = identity();
+
+        out.v[0][0] = s * aspect_ratio;
         out.v[1][1] = s;
-
-        out.v[2][2] = (f + n) / (f - n);
-        out.v[2][3] = 2.0 * f * n / (f - n);
-        out.v[3][2] = 1;
+        // -normalization
+        out.v[2][2] = -f / (f - n);
+        // Perspective
+        out.v[3][2] = -f * n / (f - n);
+        // Translation
+        out.v[2][3] = -1;
         out.v[3][3] = 0;
 
         return out;
@@ -112,6 +116,13 @@ pub const Mat4 = packed struct {
             x_matrix.v[2][2] =  cos_x;
         }
         return z_matrix.mulMat(y_matrix.mulMat(x_matrix));
+    }
+
+    pub fn scale(x: f32, y: f32, z: f32) Mat4 {
+        return M4(x, 0, 0, 0,
+                  0, y, 0, 0,
+                  0, 0, z, 0, 
+                  0, 0, 0, 1);
     }
 
     pub fn translation(movement: Vec3) Mat4 {

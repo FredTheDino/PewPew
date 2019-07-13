@@ -6,8 +6,6 @@ pub const Shader = struct {
     
     program: c_uint,
 
-    const ShaderCompilationError = error.FileNotFound;
-    
     /// Quick and dirty string replace, has sever 
     /// limitations since the replacement
     /// and find string has to be the same length.
@@ -48,7 +46,7 @@ outer:
                        path,
                        shader_type == GL_VERTEX_SHADER,
                        error_buffer[0..@intCast(usize, length)]);
-        return ShaderCompilationError;
+        return error.VertexCompilationFailed;
     }
 
     /// Compiles an entire program. Assuming that both
@@ -110,23 +108,27 @@ outer:
         glUseProgram(shader.program);
     }
 
-    /// Update the uniform variables.
-    pub fn update(shader: Shader, camera: Mat4) void {
-        {
-            const loc_t = glGetUniformLocation(shader.program, c"time");
-            glUniform1f(loc_t, @intToFloat(f32, SDL_GetTicks()) / 1000.0);
-        }
-        {
-            const loc_c = glGetUniformLocation(shader.program, c"view");
-            const c_arr: [*c]const f32 = @alignCast(4, &camera.v[0][0]);
+    /// Update the times
+    pub fn update(shader: Shader) void {
+        const loc_t = glGetUniformLocation(shader.program, c"time");
+        glUniform1f(loc_t, @intToFloat(f32, SDL_GetTicks()) / 1000.0);
+    }
 
-            glUniformMatrix4fv(loc_c, 1, 0, c_arr);
-        }
+    /// Update the camera
+    pub fn sendCamera(shader: Shader, proj: Mat4, view: Mat4) void {
+        const loc_view = glGetUniformLocation(shader.program, c"view");
+        const view_arr: [*c]const f32 = @alignCast(4, &view.v[0][0]);
+        glUniformMatrix4fv(loc_view, 1, 1, view_arr);
+
+        const loc_proj = glGetUniformLocation(shader.program, c"proj");
+        const proj_arr: [*c]const f32 = @alignCast(4, &proj.v[0][0]);
+        glUniformMatrix4fv(loc_proj, 1, 1, proj_arr);
     }
 
     /// Set where to draw something.
-    pub fn draw_at(shader: Shader, position: Vec3) void {
-        const loc_p = glGetUniformLocation(shader.program, c"position");
-        glUniform3f(loc_p, position.x, position.y, position.z);
+    pub fn sendModel(shader: Shader, model: Mat4) void {
+        const loc_model = glGetUniformLocation(shader.program, c"model");
+        const model_arr: [*c]const f32 = @alignCast(4, &model.v[0][0]);
+        glUniformMatrix4fv(loc_model, 1, 1, model_arr);
     }
 };
