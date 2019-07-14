@@ -3,7 +3,7 @@ use @import("import.zig");
 const File = std.os.File;
 
 pub const Shader = struct {
-    
+
     program: c_uint,
 
     /// Quick and dirty string replace, has sever 

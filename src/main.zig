@@ -130,19 +130,23 @@ pub fn main() anyerror!void {
 
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
+    var last_tick: f32 = 0;
+    var delta: f32 = 0;
     var x: f32 = 0;
     while (true) {
+        const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
+        delta = tick - last_tick;
+        last_tick = tick;
+
         input.update();
         if (input.isDown(Keys.QUIT))
             break;
 
-        const speed = 0.01;
+        const speed = 1 * delta;
         if (input.isDown(Keys.LEFT))
             x -= speed;
         if (input.isDown(Keys.RIGHT))
             x += speed;
-        
-        const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
 
         const s = math.sin(tick);
         const t = math.cos(tick);
