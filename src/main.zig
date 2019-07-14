@@ -23,6 +23,8 @@ const Keys = enum {
         return switch(pressed_key) {
             SDLK_a => Keys.LEFT,
             SDLK_d => Keys.RIGHT,
+            SDLK_LEFT => Keys.LEFT,
+            SDLK_RIGHT => Keys.RIGHT,
             SDLK_SPACE => Keys.JUMP,
 
             SDLK_ESCAPE => Keys.QUIT,
