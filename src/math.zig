@@ -72,8 +72,8 @@ pub const Mat4 = packed struct {
 
         var out = identity();
 
-        out.v[0][0] = s * aspect_ratio;
-        out.v[1][1] = s;
+        out.v[0][0] = s;
+        out.v[1][1] = s * aspect_ratio;
         // -normalization
         out.v[2][2] = -f / (f - n);
         // Perspective

@@ -5,11 +5,9 @@ const Shader = @import("shader.zig").Shader;
 const Mesh = @import("mesh.zig").Mesh;
 const Input = @import("input.zig").Input;
 
-const WINDOW_WIDTH: i32 = 800;
-const WINDOW_HEIGHT: i32 = 800;
-
-// TODO: Fix view matrix.
-
+var WINDOW_WIDTH: i32 = 800;
+var WINDOW_HEIGHT: i32 = 800;
+var WINDOW_ASPECT_RATIO: f32 = undefined;
 
 const Keys = enum {
     NONE,
@@ -33,22 +31,37 @@ const Keys = enum {
     }
 };
 
+var projection: Mat4 = undefined;
+fn onResize(x: i32, y: i32) void {
+    glViewport(0, 0, x, y);
+    WINDOW_WIDTH = x;
+    WINDOW_HEIGHT = y;
+    WINDOW_ASPECT_RATIO = @intToFloat(f32, WINDOW_WIDTH) / @intToFloat(f32, WINDOW_HEIGHT);
+    std.debug.warn("AR: {}\n", WINDOW_ASPECT_RATIO);
+    projection = Mat4.perspective(120, WINDOW_ASPECT_RATIO);
+}
+
 pub fn main() anyerror!void {
     var status = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     assert(status == 0);
 
-    var n = Input.InputHandler(Keys){ .states = undefined, };
 
     var title = c"Hello World";
     var window = SDL_CreateWindow(title,
                                   0, 0, 
                                   WINDOW_WIDTH, WINDOW_HEIGHT,
-                                  SDL_WINDOW_OPENGL);
+                                  SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+
+    var input = Input.InputHandler(Keys).create(onResize);
 
     var context = SDL_GL_CreateContext(window);
 
     assert(gladLoadGL() != 0);
+
+    onResize(WINDOW_WIDTH, WINDOW_HEIGHT);
+
     glEnable(GL_DEPTH_TEST);
+
 
     const program = try Shader.compile("res/shader.glsl");
     program.bind();
@@ -115,22 +128,18 @@ pub fn main() anyerror!void {
         Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
     });
 
-    const aspect_ratio = @intToFloat(f32, WINDOW_WIDTH) / @intToFloat(f32, WINDOW_HEIGHT);
-
-    const projection = Mat4.perspective(120, aspect_ratio);
-    projection.dump();
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var x: f32 = 0;
     while (true) {
-        n.update();
-        if (n.isDown(Keys.QUIT))
+        input.update();
+        if (input.isDown(Keys.QUIT))
             break;
 
         const speed = 0.01;
-        if (n.isDown(Keys.LEFT))
+        if (input.isDown(Keys.LEFT))
             x -= speed;
-        if (n.isDown(Keys.RIGHT))
+        if (input.isDown(Keys.RIGHT))
             x += speed;
         
         const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;

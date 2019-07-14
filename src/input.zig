@@ -25,6 +25,14 @@ pub const Input = struct {
 
             // TODO: Could store one field less.
             states: [@memberCount(Keys)]State,
+            onResize: fn (x: i32, y: i32) void,
+
+            pub fn create(onResize: fn (x: i32, y: i32) void) Self {
+                return Self {
+                    .states = undefined,
+                    .onResize = onResize,
+                };
+            }
 
             pub fn update(self: *Self) void {
                 for (self.states) |state, i| {
@@ -36,7 +44,12 @@ pub const Input = struct {
                     if (event.type == SDL_WINDOWEVENT) {
                         if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
                             self.states[@enumToInt(Keys.QUIT)] = State.PRESSED;
+                        } else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                            self.onResize(event.window.data1, event.window.data2);
+                        } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                            self.onResize(event.window.data1, event.window.data2);
                         }
+
                     } else if (event.type == SDL_KEYDOWN) {
                         if (event.key.repeat != 0) continue;
                         self.process(event.key.keysym.sym, State.PRESSED);
