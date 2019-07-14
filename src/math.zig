@@ -6,6 +6,7 @@ pub const accuracy = 0.0001;
 
 pub const math = @import("std").math;
 
+
 pub fn V2(x: real, y: real) Vec2 {
     return Vec2 {
         .x = x,

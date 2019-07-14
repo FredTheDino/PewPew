@@ -5,9 +5,25 @@ const Shader = @import("shader.zig").Shader;
 const Mesh = @import("mesh.zig").Mesh;
 const Input = @import("input.zig").Input;
 
-var WINDOW_WIDTH: i32 = 800;
-var WINDOW_HEIGHT: i32 = 800;
-var WINDOW_ASPECT_RATIO: f32 = undefined;
+var window_width: i32 = 800;
+var window_height: i32 = 800;
+var window_aspect_ratio: f32 = undefined;
+
+pub const ECS = @import("entities.zig");
+
+// TODO:
+//    - Entity System
+//    - Compile time model loading
+//    - Asset system?
+//    - Sound thread
+//    - Begin on actual game
+//
+// Maybes:
+//    - Hot reloading of assets?
+//    - Compile time preparation of assets?
+//    - UI?
+//    - Level editor?
+//
 
 const Keys = enum {
     NONE,
@@ -36,22 +52,22 @@ const Keys = enum {
 var projection: Mat4 = undefined;
 fn onResize(x: i32, y: i32) void {
     glViewport(0, 0, x, y);
-    WINDOW_WIDTH = x;
-    WINDOW_HEIGHT = y;
-    WINDOW_ASPECT_RATIO = @intToFloat(f32, WINDOW_WIDTH) / @intToFloat(f32, WINDOW_HEIGHT);
-    std.debug.warn("AR: {}\n", WINDOW_ASPECT_RATIO);
-    projection = Mat4.perspective(120, WINDOW_ASPECT_RATIO);
+    window_width = x;
+    window_height = y;
+    window_aspect_ratio = @intToFloat(f32, window_width) / @intToFloat(f32, window_height);
+    projection = Mat4.perspective(120, window_aspect_ratio);
 }
 
 pub fn main() anyerror!void {
     var status = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     assert(status == 0);
 
+    
 
     var title = c"Hello World";
     var window = SDL_CreateWindow(title,
                                   0, 0, 
-                                  WINDOW_WIDTH, WINDOW_HEIGHT,
+                                  window_width, window_height,
                                   SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
     var input = Input.InputHandler(Keys).create(onResize);
@@ -60,7 +76,7 @@ pub fn main() anyerror!void {
 
     assert(gladLoadGL() != 0);
 
-    onResize(WINDOW_WIDTH, WINDOW_HEIGHT);
+    onResize(window_width, window_height);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -130,6 +146,21 @@ pub fn main() anyerror!void {
         Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
     });
 
+    var entity = ECS.Entity.create();
+    var pass = entity.add(ECS.Component {
+        .transform = ECS.Transform {
+            .position = V3(0, 0, 0),
+            .rotation = V3(1, 1, 1),
+            .scale = 1.0,
+        },
+    });
+    pass = entity.add(ECS.Component {
+        .drawable = ECS.Drawable {
+            .mesh = &cube,
+            .program = &program,
+        },
+    });
+
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -164,17 +195,18 @@ pub fn main() anyerror!void {
         program.update();
         program.sendCamera(projection, view);
 
-        program.sendModel(Mat4.translation(V3(0, 0, -1)));
-        cube.draw();
-
-        program.sendModel(Mat4.translation(V3(1, 1, -1))
-                  .mulMat(Mat4.rotation(0, s, t))
-                  .mulMat(Mat4.scale(s, 1, 2))
-        );
-        cube.draw();
-
-        program.sendModel(Mat4.scale(2, 2, 2));
-        cube.draw();
+        entity.update(delta);
+//         program.sendModel(Mat4.translation(V3(0, 0, -1)));
+//         cube.draw();
+// 
+//         program.sendModel(Mat4.translation(V3(1, 1, -1))
+//                   .mulMat(Mat4.rotation(0, s, t))
+//                   .mulMat(Mat4.scale(s, 1, 2))
+//         );
+//         cube.draw();
+// 
+//         program.sendModel(Mat4.scale(2, 2, 2));
+//         cube.draw();
 
         SDL_GL_SwapWindow(window);
         SDL_Delay(10);
