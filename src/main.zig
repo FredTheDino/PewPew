@@ -12,6 +12,7 @@ var window_aspect_ratio: f32 = undefined;
 pub const ECS = @import("entities.zig");
 
 // TODO:
+//    - Debug drawing lines and points
 //    - Entity System
 //    - Compile time model loading
 //    - Asset system?
@@ -62,11 +63,11 @@ pub fn main() anyerror!void {
     var status = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     assert(status == 0);
 
-    
+
 
     var title = c"Hello World";
     var window = SDL_CreateWindow(title,
-                                  0, 0, 
+                                  0, 0,
                                   window_width, window_height,
                                   SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
@@ -84,81 +85,50 @@ pub fn main() anyerror!void {
     const program = try Shader.compile("res/shader.glsl");
     program.bind();
 
-    const mesh = Mesh.create([]Mesh.Vertex {
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z = 0, },
-        Mesh.Vertex { .x =  0.0, .y = -0.5, .z = 0, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = 0, },
+    const mesh = Mesh.createSimple([]Mesh.Vertex {
+        Mesh.Vertex.p(-0.5,  0.5, 0),
+        Mesh.Vertex.p( 0.0, -0.5, 0),
+        Mesh.Vertex.p( 0.5,  0.5, 0),
     });
 
-    const cube = Mesh.create([]Mesh.Vertex {
-        // Left Face
+    const cube = Mesh.createIndexed([]Mesh.Vertex {
         Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
         Mesh.Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
         Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
-
-        // Right Face
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
-
-        // top face
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
-
-        // bottom face
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
-
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
-
-        // front face
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
-
-        // back face
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
         Mesh.Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
 
         Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
+        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
+        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
+        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
+    }, []c_int {
+        // Left
+        0, 1, 2,    0, 2, 3,
+        // Right
+        4, 5, 6,    4, 6, 7,
+        // Front
+        0, 4, 7,    0, 7, 3,
+        // Back
+        5, 1, 2,    5, 2, 6,
+        // Top
+        3, 7, 6,    3, 6, 2,
+        // Bottom
+        0, 5, 1,    0, 5, 4,
+        
+
     });
 
     var entity = ECS.Entity.create();
-    var pass = entity.add(ECS.Component {
-        .transform = ECS.Transform {
-            .position = V3(0, 0, 0),
-            .rotation = V3(1, 1, 1),
-            .scale = 1.0,
-        },
+
+    entity.add(ECS.Transform {
+        .position = V3(0, 0, 0),
+        .rotation = V3(1, 1, 1),
+        .scale = 1.0,
     });
-    pass = entity.add(ECS.Component {
-        .drawable = ECS.Drawable {
-            .mesh = &cube,
-            .program = &program,
-        },
+
+    entity.add(ECS.Drawable {
+        .mesh = &cube,
+        .program = &program,
     });
 
 
@@ -198,13 +168,13 @@ pub fn main() anyerror!void {
         entity.update(delta);
 //         program.sendModel(Mat4.translation(V3(0, 0, -1)));
 //         cube.draw();
-// 
+//
 //         program.sendModel(Mat4.translation(V3(1, 1, -1))
 //                   .mulMat(Mat4.rotation(0, s, t))
 //                   .mulMat(Mat4.scale(s, 1, 2))
 //         );
 //         cube.draw();
-// 
+//
 //         program.sendModel(Mat4.scale(2, 2, 2));
 //         cube.draw();
 

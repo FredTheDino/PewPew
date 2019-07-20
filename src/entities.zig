@@ -3,13 +3,6 @@ use @import("import.zig");
 const Shader = @import("shader.zig").Shader;
 const Mesh = @import("mesh.zig").Mesh;
 
-// TODO: Needs a lot of beatification!
-
-pub const ComponentType = enum {
-    drawable,
-    transform,
-};
-
 pub const Transform = struct {
     position: Vec3,
     rotation: Vec3,
@@ -32,58 +25,75 @@ pub const Drawable = struct {
     pub fn draw(self: Drawable, entity: *Entity) void {
         // TODO: Is this needed?
         self.program.bind();
-        if (entity.has(ComponentType.transform)) {
-            const c = entity.get(ComponentType.transform);
+        if (entity.has(C.TRANSFORM)) {
+            const c = entity.get(C.TRANSFORM);
             self.program.sendModel(c.transform.toMat());
         }
         self.mesh.draw();
     }
 };
 
-fn noop() void {}
 
-pub const Component = union(ComponentType) {
+const C = Component;
+pub const Component = union(enum) {
+    // TODO: Can I make this into a macro somehow?
     drawable: Drawable,
-    transform: Transform,
+    const DRAWABLE = C { .drawable = undefined };
 
-    pub fn update(self: Component, entity: *Entity, delta: f32) void {
+    transform: Transform,
+    const TRANSFORM = C { .transform = undefined };
+
+    fn noop() void {}
+
+    fn update(self: C, entity: *Entity, delta: f32) void {
         switch (self) {
-            ComponentType.drawable => |c| c.draw(entity),
-            ComponentType.transform => noop(),
+            C.drawable => |c| c.draw(entity),
+            C.transform => noop(),
         }
+    }
+
+    fn wrap(component: var) C {
+        return switch (@typeOf(component)) {
+            Drawable => C { .drawable = component, },
+            Transform => C { .transform = component, },
+            else => unreachable,
+        };
     }
 };
 
 pub const Entity = struct {
-    active_components: [@memberCount(ComponentType)] bool,
-    components: [@memberCount(ComponentType)] Component,
+    active_components: [@memberCount(C)] bool,
+    components: [@memberCount(C)] C,
 
     pub fn create() Entity {
         return Entity {
-            .active_components = []bool{false} ** @memberCount(ComponentType),
+            .active_components = []bool{false} ** @memberCount(C),
             .components = undefined,
         };
     }
 
-    pub fn add(self: *Entity, component: Component) bool {
-        const component_type = ComponentType(component);
-        const pos = @enumToInt(component_type);
-        const new = !self.active_components[pos];
+    pub fn add(self: *Entity, component: var) void {
+        var wrapped: Component = undefined;
+        if (@typeOf(component) == C) {
+            wrapped = component;
+        } else {
+            wrapped = C.wrap(component);
+        }
+        const pos = @enumToInt(wrapped);
         self.active_components[pos] = true;
-        self.components[pos] = component;
-        return new;
+        self.components[pos] = wrapped;
     }
 
-    pub fn has(self: Entity, component: ComponentType) bool {
+    pub fn has(self: Entity, comptime component: C) bool {
         return self.active_components[@enumToInt(component)];
     }
 
-    pub fn get(self: Entity, component: ComponentType) Component {
+    pub fn get(self: Entity, component: C) C {
         return self.components[@enumToInt(component)];
     }
 
     pub fn update(self: *Entity, delta: f32) void {
-        for(self.active_components) |active, i| {
+        for (self.active_components) |active, i| {
             if (!active) continue;
             self.components[i].update(self, delta);
         }
