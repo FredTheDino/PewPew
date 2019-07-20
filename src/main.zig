@@ -3,6 +3,8 @@ use @import("import.zig");
 use @import("math.zig");
 const Shader = @import("shader.zig").Shader;
 const Mesh = @import("mesh.zig").Mesh;
+const Vertex = @import("mesh.zig").Vertex;
+const DebugDraw = @import("mesh.zig").DebugDraw;
 const Input = @import("input.zig").Input;
 
 var window_width: i32 = 800;
@@ -85,22 +87,22 @@ pub fn main() anyerror!void {
     const program = try Shader.compile("res/shader.glsl");
     program.bind();
 
-    const mesh = Mesh.createSimple([]Mesh.Vertex {
-        Mesh.Vertex.p(-0.5,  0.5, 0),
-        Mesh.Vertex.p( 0.0, -0.5, 0),
-        Mesh.Vertex.p( 0.5,  0.5, 0),
+    const mesh = Mesh.createSimple([]Vertex {
+        Vertex.p(-0.5,  0.5, 0),
+        Vertex.p( 0.0, -0.5, 0),
+        Vertex.p( 0.5,  0.5, 0),
     });
 
-    const cube = Mesh.createIndexed([]Mesh.Vertex {
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
+    const cube = Mesh.createIndexed([]Vertex {
+        Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
+        Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
+        Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
+        Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
 
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Mesh.Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-        Mesh.Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
+        Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
+        Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
+        Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
+        Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
     }, []c_int {
         // Left
         0, 1, 2,    0, 2, 3,
@@ -131,6 +133,7 @@ pub fn main() anyerror!void {
         .program = &program,
     });
 
+    var line_util = DebugDraw.init();
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -164,7 +167,10 @@ pub fn main() anyerror!void {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
         program.sendCamera(projection, view);
-
+        
+        line_util.drawLine(V3(0, 0, 0), V3(10, 0, 0), V3(1, 0, 0));
+        line_util.drawLine(V3(0, 0, 0), V3(0, 10, 0), V3(0, 1, 0));
+        
         entity.update(delta);
 //         program.sendModel(Mat4.translation(V3(0, 0, -1)));
 //         cube.draw();
@@ -177,6 +183,7 @@ pub fn main() anyerror!void {
 //
 //         program.sendModel(Mat4.scale(2, 2, 2));
 //         cube.draw();
+        line_util.draw(program);
 
         SDL_GL_SwapWindow(window);
         SDL_Delay(10);

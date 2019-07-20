@@ -2,6 +2,8 @@ use @import("import.zig");
 
 const File = std.os.File;
 
+// TODO: Cache the locations.
+
 pub const Shader = struct {
 
     program: c_uint,
@@ -123,6 +125,20 @@ outer:
         const loc_proj = glGetUniformLocation(shader.program, c"proj");
         const proj_arr: [*c]const f32 = @alignCast(4, &proj.v[0][0]);
         glUniformMatrix4fv(loc_proj, 1, 1, proj_arr);
+    }
+    
+    /// Send in a color
+    pub fn color(shader: Shader, c: Vec3) void {
+        const loc_use_color = glGetUniformLocation(shader.program, c"use_color");
+        const loc_color = glGetUniformLocation(shader.program, c"color");
+        glUniform1i(loc_use_color, 1);
+        glUniform3f(loc_color, c.x, c.y, c.z);
+    }
+
+    /// Don't render any colors
+    pub fn disableColor(shader: Shader) void {
+        const loc_use_color = glGetUniformLocation(shader.program, c"use_color");
+        glUniform1i(loc_use_color, 0);
     }
 
     /// Set where to draw something.

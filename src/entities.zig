@@ -29,7 +29,7 @@ pub const Drawable = struct {
             const c = entity.get(C.TRANSFORM);
             self.program.sendModel(c.transform.toMat());
         }
-        self.mesh.draw();
+        self.mesh.drawTris();
     }
 };
 

@@ -7,6 +7,9 @@ uniform mat4 model;
 
 uniform float time;
 
+uniform bool use_color;
+uniform vec3 color;
+
 #ifdef VERT
 
 in vec3 in_position;
@@ -16,13 +19,17 @@ void main()
 {
 	gl_Position = proj * view * model * vec4(in_position, 1);
 
-    float color = mod(gl_VertexID, 3);
-    if (color < 1)
-        pass_color = vec3(1, 0, 0);
-    else if (color < 2)
-        pass_color = vec3(0, 1, 0);
-    else
-        pass_color = vec3(0, 0, 1);
+    if (use_color) {
+        pass_color = color;
+    } else {
+        float color = mod(gl_VertexID, 3);
+        if (color < 1)
+            pass_color = vec3(1, 0, 0);
+        else if (color < 2)
+            pass_color = vec3(0, 1, 0);
+        else
+            pass_color = vec3(0, 0, 1);
+    }
 }
 
 #else
