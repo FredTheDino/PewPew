@@ -34,6 +34,8 @@ const Keys = enum {
     JUMP,
     LEFT,
     RIGHT,
+    UP,
+    DOWN,
 
     /// This is the mapping function that
     /// takes an SDL input and returns the
@@ -42,6 +44,8 @@ const Keys = enum {
         return switch(pressed_key) {
             SDLK_a => Keys.LEFT,
             SDLK_d => Keys.RIGHT,
+            SDLK_w => Keys.UP,
+            SDLK_s => Keys.DOWN,
             SDLK_LEFT => Keys.LEFT,
             SDLK_RIGHT => Keys.RIGHT,
             SDLK_SPACE => Keys.JUMP,
@@ -116,8 +120,6 @@ pub fn main() anyerror!void {
         3, 7, 6,    3, 6, 2,
         // Bottom
         0, 5, 1,    0, 5, 4,
-        
-
     });
 
     var entity = ECS.Entity.create();
@@ -139,6 +141,7 @@ pub fn main() anyerror!void {
     var last_tick: f32 = 0;
     var delta: f32 = 0;
     var x: f32 = 0;
+    var y: f32 = 0;
     while (true) {
         const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
         delta = tick - last_tick;
@@ -150,14 +153,18 @@ pub fn main() anyerror!void {
 
         const speed = 1 * delta;
         if (input.isDown(Keys.LEFT))
-            x -= speed;
+            y -= speed;
         if (input.isDown(Keys.RIGHT))
+            y += speed;
+        if (input.isDown(Keys.UP))
             x += speed;
+        if (input.isDown(Keys.DOWN))
+            x -= speed;
 
         const s = math.sin(tick);
         const t = math.cos(tick);
 
-        const rotation = Mat4.rotation(x, 0, 0);
+        const rotation = Mat4.rotation(x, y, 0);
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
         const view = translation.mulMat(rotation.mulMat(scaling));
@@ -168,21 +175,16 @@ pub fn main() anyerror!void {
         program.update();
         program.sendCamera(projection, view);
         
-        line_util.drawLine(V3(0, 0, 0), V3(10, 0, 0), V3(1, 0, 0));
-        line_util.drawLine(V3(0, 0, 0), V3(0, 10, 0), V3(0, 1, 0));
+        const num = 10;
+        const half_num = @divTrunc(num, 2);
+        comptime var i = -half_num;
+        inline while (i <= half_num) : ( i += 1 ) {
+            line_util.line(V3(-half_num, 0, i), V3(half_num, 0, i), V3(1, 0, 0));
+            line_util.line(V3(i, 0, -half_num), V3(i, 0, half_num), V3(0, 0, 1));
+        }
+        line_util.point(V3(0, 2, 0), V3(0, 1, 0));
         
         entity.update(delta);
-//         program.sendModel(Mat4.translation(V3(0, 0, -1)));
-//         cube.draw();
-//
-//         program.sendModel(Mat4.translation(V3(1, 1, -1))
-//                   .mulMat(Mat4.rotation(0, s, t))
-//                   .mulMat(Mat4.scale(s, 1, 2))
-//         );
-//         cube.draw();
-//
-//         program.sendModel(Mat4.scale(2, 2, 2));
-//         cube.draw();
         line_util.draw(program);
 
         SDL_GL_SwapWindow(window);

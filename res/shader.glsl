@@ -18,7 +18,7 @@ out vec3 pass_color;
 void main()
 {
 	gl_Position = proj * view * model * vec4(in_position, 1);
-
+    
     if (use_color) {
         pass_color = color;
     } else {

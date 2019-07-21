@@ -116,7 +116,7 @@ pub const Mat4 = packed struct {
             x_matrix.v[2][1] =  sin_x;
             x_matrix.v[2][2] =  cos_x;
         }
-        return z_matrix.mulMat(y_matrix.mulMat(x_matrix));
+        return x_matrix.mulMat(y_matrix.mulMat(z_matrix));
     }
 
     pub fn scale(x: f32, y: f32, z: f32) Mat4 {
@@ -502,6 +502,7 @@ pub const Vec4 = packed struct {
 
 // TODO: Probably write more tests for the math.
 test "Vec2 basics" {
+    {
     const a = V2(2, 0);
     assert(a.equals(Vec2 { .x = 2, .y = 0 }));
     {
@@ -519,5 +520,6 @@ test "Vec2 basics" {
     {
         var b = a.normalized();
         assert(b.equals(Vec2 { .x = 1, .y = 0 }));
+    }
     }
 }

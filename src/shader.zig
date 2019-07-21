@@ -41,7 +41,7 @@ outer:
         glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
         if (ok != 0) return shader;
 
-        var error_buffer: [] u8 = a.alloc(u8, 512) catch unreachable;
+        var error_buffer: [] u8 = A.alloc(u8, 512) catch unreachable;
         var length: c_int = @intCast(c_int, error_buffer.len);
         glGetShaderInfoLog(shader, length, &length, error_buffer.ptr);
         std.debug.warn("Compilation failed \"{}({})\":\n\t{}", 
@@ -58,7 +58,7 @@ outer:
         // Read in file
         var file = try File.openRead(path);
         var file_size = try File.getEndPos(file);
-        var buffer = try a.alloc(u8, file_size);
+        var buffer = try A.alloc(u8, file_size);
         var read = File.read(file, buffer);
 
 
@@ -92,7 +92,7 @@ outer:
         glGetProgramiv(shader_program.program, GL_LINK_STATUS, &ok);
         if (ok != 0) return shader_program;
         
-        var error_buffer: [] u8 = a.alloc(u8, 512) catch unreachable;
+        var error_buffer: [] u8 = A.alloc(u8, 512) catch unreachable;
         var length = @intCast(c_int, error_buffer.len);
         glGetProgramInfoLog(shader_program.program, 
                             length, 

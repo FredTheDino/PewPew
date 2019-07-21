@@ -1,9 +1,6 @@
 use @import("import.zig");
 
 const Shader = @import("shader.zig").Shader;
-const List = @import("std").ArrayList;
-const DA = @import("std").heap.DirectAllocator.init();
-var A = DA.allocator;
 
 pub const Vertex = packed struct {
     x: f32,
@@ -16,69 +13,83 @@ pub const Vertex = packed struct {
             .z = z,
         };
     }
-
-//        pub fn pc(x: f32, y: f32, z: f32, r: f32, g: f32, b: f32) Vertex {
-//            return Vertex { .x = x, .y = y, .z = z, .r = r, .g = g, .b = b, };
-//        }
 };
 
 pub const DebugDraw = struct {
     const ColorList = List(Vec3);
     const MeshList = List(Mesh);
 
-    const LINES_PER_BUCKET = 200;
-    colors: ColorList,
-    buckets: MeshList,
+    const MAX_LINES = 100;
+    line_mesh: Mesh,
+    line_colors: [MAX_LINES]Vec3,
+    lines_used: usize,
 
-    // TODO: Take in allocator
+    const MAX_POINTS = 100;
+    point_mesh: Mesh,
+    point_colors: [MAX_POINTS]Vec3,
+    points_used: usize,
+
     pub fn init() DebugDraw {
-        var dd = DebugDraw {
-            .colors = ColorList.init(&A),
-            .buckets = MeshList.init(&A),
-        };
-        dd.buckets.append(Mesh.createEmpty(LINES_PER_BUCKET * 2)) catch unreachable;
-        return dd;
+        var self: DebugDraw = undefined;
+        self.line_mesh = Mesh.createEmpty(MAX_LINES * 2);
+        self.lines_used = 0;
+        self.point_mesh = Mesh.createEmpty(MAX_POINTS);
+        self.points_used = 0;
+        return self;
     }
 
-    pub fn drawLine(self: *DebugDraw, p_a: Vec3, p_b: Vec3, color: Vec3) void {
-        self.colors.append(color) catch unreachable;
-        var bucket: Mesh = self.buckets.at(self.buckets.len - 1);
-        if (bucket.used_verticies == bucket.total_verticies) {
-            // We need a new bucket
-            bucket = Mesh.createEmpty(LINES_PER_BUCKET * 2);
-            self.buckets.append(bucket) catch unreachable;
+    pub fn point(self: *DebugDraw, p: Vec3, color: Vec3) void {
+        const current = self.points_used;
+        if (current == MAX_LINES) return;
+        self.points_used += 1;
+        self.point_colors[current] = color;
+        self.point_mesh.append(Vertex {
+            .x = p.x,
+            .y = p.y,
+            .z = p.z,
+        });
+    }
 
-        }
-        bucket.append(Vertex {
-            .x = p_a.x,
-            .y = p_a.y,
-            .z = p_a.z,
+    pub fn line(self: *DebugDraw, a: Vec3, b: Vec3, color: Vec3) void {
+        const current = self.lines_used;
+        if (current == MAX_LINES) return;
+        self.line_colors[current] = color;
+        self.lines_used += 1;
+        self.line_mesh.append(Vertex {
+            .x = a.x,
+            .y = a.y,
+            .z = a.z,
         });
-        bucket.append(Vertex {
-            .x = p_b.x,
-            .y = p_b.y,
-            .z = p_b.z,
+        self.line_mesh.append(Vertex {
+            .x = b.x,
+            .y = b.y,
+            .z = b.z,
         });
-        self.buckets.set(self.buckets.len - 1, bucket);
     }
 
     pub fn draw(self: *DebugDraw, shader: Shader) void {
+        shader.sendModel(Mat4.identity());
         {
             var i: usize = 0;
-            while (i != self.colors.len) : ( i += 1 ) {
-                shader.color(self.colors.at(i));
-                const bucket = @divFloor(i, LINES_PER_BUCKET);
-                const line_id = i - bucket * LINES_PER_BUCKET;
-                self.buckets.at(bucket).drawLine(@intCast(c_int, line_id));
+            while (i != self.lines_used) : ( i += 1 ) {
+                shader.color(self.line_colors[i]);
+                self.line_mesh.drawLine(@intCast(c_int, i * 2));
             }
         }
 
         {
-            self.colors.resize(0) catch unreachable;
             var i: usize = 0;
-            while (i != self.buckets.len) : ( i += 1 ) {
-                self.buckets.at(i).clear();
+            while (i != self.points_used) : ( i += 1 ) {
+                shader.color(self.point_colors[i]);
+                self.point_mesh.drawPoint(@intCast(c_int, i));
             }
+        }
+
+        {
+            self.line_mesh.clear();
+            self.lines_used = 0;
+            self.point_mesh.clear();
+            self.points_used = 0;
         }
         shader.disableColor();
     }
@@ -103,6 +114,7 @@ pub const Mesh = struct {
         assert(self.used_verticies < self.total_verticies);
 
         glBindVertexArray(self.gl_object);
+        glBindBuffer(GL_ARRAY_BUFFER, self.gl_buffer);
         glBufferSubData(GL_ARRAY_BUFFER,
                         @intCast(c_long, self.used_verticies * @sizeOf(Vertex)),
                         @sizeOf(Vertex),
@@ -226,10 +238,17 @@ pub const Mesh = struct {
         glBindVertexArray(self.gl_object);
         if (self.gl_indexbuffer == 0) {
             glLineWidth(10.0);
-            glDrawArrays(GL_LINES, index * 2, @intCast(c_int, 2));
-        } else {
-            unreachable;
-        }
+            glDrawArrays(GL_LINES, index, @intCast(c_int, 2));
+        } else { unreachable; }
+        glBindVertexArray(0);
+    }
+
+    pub fn drawPoint(self: Mesh, index: c_int) void {
+        glBindVertexArray(self.gl_object);
+        if (self.gl_indexbuffer == 0) {
+            glPointSize(10.0);
+            glDrawArrays(GL_POINTS, index, @intCast(c_int, 1));
+        } else { unreachable; }
         glBindVertexArray(0);
     }
 };

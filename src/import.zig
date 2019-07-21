@@ -20,5 +20,5 @@ pub use @import("math.zig");
 //    var arena = std.heap.DirectAllocator.init();
 //    defer arena.deinit();
 //    const allocator = &arena.allocator;
-pub const a = std.heap.c_allocator;
+pub const A = std.heap.c_allocator;
 
