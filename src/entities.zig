@@ -10,9 +10,7 @@ pub const Transform = struct {
 
     pub fn toMat(self: Transform) Mat4 {
         const scale = Mat4.scale(self.scale, self.scale, self.scale);
-        const rotation = Mat4.rotation(self.rotation.x,
-                                       self.rotation.y,
-                                       self.rotation.z);
+        const rotation = Mat4.rotation(self.rotation.x, self.rotation.y, self.rotation.z);
         const translation = Mat4.translation(self.position);
         return translation.mulMat(rotation.mulMat(scale));
     }
@@ -25,23 +23,23 @@ pub const Drawable = struct {
     pub fn draw(self: Drawable, entity: *Entity) void {
         // TODO: Is this needed?
         self.program.bind();
-        if (entity.has(C.TRANSFORM)) {
-            const c = entity.get(C.TRANSFORM);
+        if (entity.has(TRANSFORM)) {
+            const c = entity.get(TRANSFORM);
             self.program.sendModel(c.transform.toMat());
         }
         self.mesh.drawTris();
     }
 };
 
+pub const TRANSFORM = C{ .transform = undefined };
+pub const DRAWABLE = C{ .drawable = undefined };
 
 const C = Component;
 pub const Component = union(enum) {
     // TODO: Can I make this into a macro somehow?
-    drawable: Drawable,
-    const DRAWABLE = C { .drawable = undefined };
-
     transform: Transform,
-    const TRANSFORM = C { .transform = undefined };
+
+    drawable: Drawable,
 
     fn noop() void {}
 
@@ -52,24 +50,41 @@ pub const Component = union(enum) {
         }
     }
 
-    fn wrap(component: var) C {
+    pub fn wrap(component: var) C {
         return switch (@typeOf(component)) {
-            Drawable => C { .drawable = component, },
-            Transform => C { .transform = component, },
+            Drawable => C{
+                .drawable = component,
+            },
+            Transform => C{
+                .transform = component,
+            },
             else => unreachable,
         };
     }
 };
 
 pub const Entity = struct {
-    active_components: [@memberCount(C)] bool,
-    components: [@memberCount(C)] C,
+    active_components: [@memberCount(C)]bool,
+    components: [@memberCount(C)]C,
 
     pub fn create() Entity {
-        return Entity {
+        return Entity{
             .active_components = []bool{false} ** @memberCount(C),
             .components = undefined,
         };
+    }
+
+    pub fn createWith(args: ...) Entity {
+        var self = create();
+        self.addAll(args);
+        return self;
+    }
+
+    pub fn addAll(self: *Entity, args: ...) void {
+        comptime var i = 0;
+        inline while (i < args.len) : (i += 1) {
+            self.add(args[i]);
+        }
     }
 
     pub fn add(self: *Entity, component: var) void {
@@ -88,8 +103,13 @@ pub const Entity = struct {
         return self.active_components[@enumToInt(component)];
     }
 
-    pub fn get(self: Entity, component: C) C {
+    pub fn get(self: Entity, comptime component: C) C {
         return self.components[@enumToInt(component)];
+        // var c = self.components[@enumToInt(component)];
+        // return switch(c) {
+        //     TRANSFORM => return &c.transform,
+        //     DRAWABLE => return &c.drawable,
+        // };
     }
 
     pub fn update(self: *Entity, delta: f32) void {
@@ -99,5 +119,3 @@ pub const Entity = struct {
         }
     }
 };
-
-

@@ -14,9 +14,9 @@ var window_aspect_ratio: f32 = undefined;
 pub const ECS = @import("entities.zig");
 
 // TODO:
-//    - Debug drawing lines and points
 //    - Entity System
 //    - Compile time model loading
+//    - Loading .png
 //    - Asset system?
 //    - Sound thread
 //    - Begin on actual game
@@ -41,7 +41,7 @@ const Keys = enum {
     /// takes an SDL input and returns the
     /// corresponding enum.
     pub fn map(pressed_key: c_int) @This() {
-        return switch(pressed_key) {
+        return switch (pressed_key) {
             SDLK_a => Keys.LEFT,
             SDLK_d => Keys.RIGHT,
             SDLK_w => Keys.UP,
@@ -66,16 +66,10 @@ fn onResize(x: i32, y: i32) void {
 }
 
 pub fn main() anyerror!void {
-    var status = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    assert(status == 0);
-
-
+    assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == 0);
 
     var title = c"Hello World";
-    var window = SDL_CreateWindow(title,
-                                  0, 0,
-                                  window_width, window_height,
-                                  SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    var window = SDL_CreateWindow(title, 0, 0, window_width, window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
     var input = Input.InputHandler(Keys).create(onResize);
 
@@ -87,50 +81,53 @@ pub fn main() anyerror!void {
 
     glEnable(GL_DEPTH_TEST);
 
-
     const program = try Shader.compile("res/shader.glsl");
     program.bind();
 
-    const mesh = Mesh.createSimple([]Vertex {
+    const mesh = Mesh.createSimple([]Vertex{
         Vertex.p(-0.5,  0.5, 0),
         Vertex.p( 0.0, -0.5, 0),
         Vertex.p( 0.5,  0.5, 0),
     });
 
-    const cube = Mesh.createIndexed([]Vertex {
-        Vertex { .x = -0.5, .y = -0.5, .z = -0.5, },
-        Vertex { .x = -0.5, .y = -0.5, .z =  0.5, },
-        Vertex { .x = -0.5, .y =  0.5, .z =  0.5, },
-        Vertex { .x = -0.5, .y =  0.5, .z = -0.5, },
-
-        Vertex { .x =  0.5, .y = -0.5, .z = -0.5, },
-        Vertex { .x =  0.5, .y = -0.5, .z =  0.5, },
-        Vertex { .x =  0.5, .y =  0.5, .z =  0.5, },
-        Vertex { .x =  0.5, .y =  0.5, .z = -0.5, },
-    }, []c_int {
+    const cube = Mesh.createIndexed([]Vertex{
+        Vertex{ .x = -0.5, .y = -0.5, .z = -0.5, },
+        Vertex{ .x = -0.5, .y = -0.5, .z =  0.5, },
+        Vertex{ .x = -0.5, .y =  0.5, .z =  0.5, },
+        Vertex{ .x = -0.5, .y =  0.5, .z = -0.5, },
+        Vertex{ .x =  0.5, .y = -0.5, .z = -0.5, },
+        Vertex{ .x =  0.5, .y = -0.5, .z =  0.5, },
+        Vertex{ .x =  0.5, .y =  0.5, .z =  0.5, },
+        Vertex{ .x =  0.5, .y =  0.5, .z = -0.5, },
+    }, []c_int{
         // Left
-        0, 1, 2,    0, 2, 3,
+        0, 1, 2,     0, 2, 3,
         // Right
-        4, 5, 6,    4, 6, 7,
+        4, 5, 6,     4, 6, 7,
         // Front
-        0, 4, 7,    0, 7, 3,
+        0, 4, 7,     0, 7, 3,
         // Back
-        5, 1, 2,    5, 2, 6,
+        5, 1, 2,     5, 2, 6,
         // Top
-        3, 7, 6,    3, 6, 2,
-        // Bottom
-        0, 5, 1,    0, 5, 4,
+        3, 7, 6,     3, 6, 2,
+        // Bottom    
+        0, 5, 1,     0, 5, 4,
     });
 
-    var entity = ECS.Entity.create();
-
-    entity.add(ECS.Transform {
+    var entity_a = ECS.Entity.createWith(ECS.Transform{
         .position = V3(0, 0, 0),
         .rotation = V3(1, 1, 1),
         .scale = 1.0,
+    }, ECS.Drawable{
+        .mesh = &cube,
+        .program = &program,
     });
 
-    entity.add(ECS.Drawable {
+    var entity_b = ECS.Entity.createWith(ECS.Transform{
+        .position = V3(2, 1, 1),
+        .rotation = V3(0, 0, 0),
+        .scale = 2.0,
+    }, ECS.Drawable{
         .mesh = &cube,
         .program = &program,
     });
@@ -164,6 +161,9 @@ pub fn main() anyerror!void {
         const s = math.sin(tick);
         const t = math.cos(tick);
 
+        //entity_b.get(ECS.Component.TRANSFORM).transform.position.x = s;
+        //entity_b.get(ECS.TRANSFORM).position.x = s;
+
         const rotation = Mat4.rotation(x, y, 0);
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
@@ -174,17 +174,18 @@ pub fn main() anyerror!void {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
         program.sendCamera(projection, view);
-        
+
         const num = 10;
         const half_num = @divTrunc(num, 2);
         comptime var i = -half_num;
-        inline while (i <= half_num) : ( i += 1 ) {
+        inline while (i <= half_num) : (i += 1) {
             line_util.line(V3(-half_num, 0, i), V3(half_num, 0, i), V3(1, 0, 0));
             line_util.line(V3(i, 0, -half_num), V3(i, 0, half_num), V3(0, 0, 1));
         }
         line_util.point(V3(0, 2, 0), V3(0, 1, 0));
-        
-        entity.update(delta);
+
+        entity_a.update(delta);
+        entity_b.update(delta);
         line_util.draw(program);
 
         SDL_GL_SwapWindow(window);
