@@ -2,16 +2,16 @@ use @import("import.zig");
 
 use @import("math.zig");
 const Shader = @import("shader.zig").Shader;
+const DebugDraw = @import("mesh.zig").DebugDraw;
 const Mesh = @import("mesh.zig").Mesh;
 const Vertex = @import("mesh.zig").Vertex;
-const DebugDraw = @import("mesh.zig").DebugDraw;
 const Input = @import("input.zig").Input;
 
 var window_width: i32 = 800;
 var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
-pub const ECS = @import("entities.zig");
+pub const ECS = @import("entity.zig");
 
 // TODO:
 //    - Entity System
@@ -91,14 +91,14 @@ pub fn main() anyerror!void {
     });
 
     const cube = Mesh.createIndexed([]Vertex{
-        Vertex{ .x = -0.5, .y = -0.5, .z = -0.5, },
-        Vertex{ .x = -0.5, .y = -0.5, .z =  0.5, },
-        Vertex{ .x = -0.5, .y =  0.5, .z =  0.5, },
-        Vertex{ .x = -0.5, .y =  0.5, .z = -0.5, },
-        Vertex{ .x =  0.5, .y = -0.5, .z = -0.5, },
-        Vertex{ .x =  0.5, .y = -0.5, .z =  0.5, },
-        Vertex{ .x =  0.5, .y =  0.5, .z =  0.5, },
-        Vertex{ .x =  0.5, .y =  0.5, .z = -0.5, },
+        Vertex.p(-0.5, -0.5, -0.5),
+        Vertex.p(-0.5, -0.5,  0.5),
+        Vertex.p(-0.5,  0.5,  0.5),
+        Vertex.p(-0.5,  0.5, -0.5),
+        Vertex.p( 0.5, -0.5, -0.5),
+        Vertex.p( 0.5, -0.5,  0.5),
+        Vertex.p( 0.5,  0.5,  0.5),
+        Vertex.p( 0.5,  0.5, -0.5),
     }, []c_int{
         // Left
         0, 1, 2,     0, 2, 3,
