@@ -1,7 +1,9 @@
 use @import("import.zig");
 
 const Shader = @import("shader.zig").Shader;
-const Mesh = @import("mesh.zig").Mesh;
+const Mesh = @import("mesh.zig").Mesh; 
+
+const List = @import("std").ArrayList;
 
 pub const Transform = struct {
     position: Vec3,
@@ -38,7 +40,6 @@ const C = Component;
 pub const Component = union(enum) {
     // TODO: Can I make this into a macro somehow?
     transform: Transform,
-
     drawable: Drawable,
 
     fn noop() void {}
@@ -64,20 +65,22 @@ pub const Component = union(enum) {
 };
 
 pub const Entity = struct {
+    id: EntityID,
+    // TODO: Should this be passed into the update function?
+    // Then we don't have to waste space on it, and these
+    // entities would be leaner.
+    system: *ECS,
     active_components: [@memberCount(C)]bool,
     components: [@memberCount(C)]C,
 
-    pub fn create() Entity {
-        return Entity{
+    pub fn create(self: *ECS) Entity {
+        var e = Entity{
             .active_components = []bool{false} ** @memberCount(C),
             .components = undefined,
+            .system = self,
+            .id = EntityID { .pos = 0, .gen = 0, },
         };
-    }
-
-    pub fn createWith(args: ...) Entity {
-        var self = create();
-        self.addAll(args);
-        return self;
+        return e;
     }
 
     pub fn addAll(self: *Entity, args: ...) void {
@@ -103,13 +106,11 @@ pub const Entity = struct {
         return self.active_components[@enumToInt(component)];
     }
 
+    // TODO: Is there someway to wrap this?
+    // Should I make explicit methods for each component?
+    // As it is now I think it works... A tad verbose though.
     pub fn get(self: Entity, comptime component: C) C {
         return self.components[@enumToInt(component)];
-        // var c = self.components[@enumToInt(component)];
-        // return switch(c) {
-        //     TRANSFORM => return &c.transform,
-        //     DRAWABLE => return &c.drawable,
-        // };
     }
 
     pub fn update(self: *Entity, delta: f32) void {
@@ -119,3 +120,87 @@ pub const Entity = struct {
         }
     }
 };
+
+pub const EntityID = struct {
+    pos: i32,
+    gen: u32,
+
+    pub fn isAlive(self: EntityID) bool {
+        return self.pos >= 0;
+    }
+
+    pub fn get(self: EntityID, system: *ECS) ?*Entity {
+        return system.get(self);
+    }
+};
+
+pub const ECS = struct {
+    // List of entities
+    // Add / Remove / Get
+    const EntityList = List(Entity);
+    const IDList = List(EntityID);
+    
+    entities: EntityList,
+    next_free: i32,
+
+    pub fn create() ECS {
+        return ECS{
+            .entities = EntityList.init(A),
+            .next_free = 0,
+        };
+    }
+
+    //
+    pub fn genId(self: *ECS, e: *Entity) ?EntityID {
+        var id = EntityID{ .pos = 0, .gen = 0, };
+        if (self.next_free < 0) {
+            const i = @intCast(usize, 1 - self.next_free);
+            const next_id = self.entities.at(i).id;
+            id = EntityID{
+                .pos = @intCast(i32, i),
+                .gen = next_id.gen + 1,
+            };
+            self.next_free = -(1 + next_id.pos);
+        } else {
+            id = EntityID{
+                .pos = self.next_free,
+                .gen = 0,
+            };
+            // TODO: Is this needed?
+            self.entities.ensureCapacity(@intCast(usize, id.pos + 1)) catch |err| switch(err) {
+                error.OutOfMemory => return null,
+            };
+            self.next_free += 1;
+        }
+        e.id = id;
+        // TODO: Might be smart to add it here..
+        return id;
+    }
+
+    // TODO: Remove method
+    
+    // TODO: Is this redundant? It can be stored on the ID.
+    pub fn get(self: *ECS, id: EntityID) ?*EntityID {
+        var e = self.entities.get(id.pos) catch return null;
+        if (e.id.gen != id.gen) return null;
+        return e;
+    }
+
+    pub fn createWith(self: *ECS, args: ...) EntityID {
+        var e = Entity.create(self);
+        e.addAll(args);
+        var id = self.genId(&e) orelse return EntityID{ .pos = -1, .gen = 0, };
+        self.entities.set(@intCast(usize, id.pos), e);
+        return id;
+    }
+
+    pub fn update(self: *ECS, delta: f32) void {
+        var i: usize = 0;
+        while (i < self.entities.count()): (i += 1) {
+            var e = self.entities.at(i);
+            if (!e.id.isAlive()) continue;
+            e.update(delta);
+        }
+    }
+};
+

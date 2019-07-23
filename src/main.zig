@@ -114,7 +114,9 @@ pub fn main() anyerror!void {
         0, 5, 1,     0, 5, 4,
     });
 
-    var entity_a = ECS.Entity.createWith(ECS.Transform{
+    var ecs = ECS.ECS.create();
+    var entity_a = ecs.createWith(
+    ECS.Transform{
         .position = V3(0, 0, 0),
         .rotation = V3(1, 1, 1),
         .scale = 1.0,
@@ -123,7 +125,8 @@ pub fn main() anyerror!void {
         .program = &program,
     });
 
-    var entity_b = ECS.Entity.createWith(ECS.Transform{
+    var entity_b = ecs.createWith(
+    ECS.Transform{
         .position = V3(2, 1, 1),
         .rotation = V3(0, 0, 0),
         .scale = 2.0,
@@ -168,6 +171,8 @@ pub fn main() anyerror!void {
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
         const view = translation.mulMat(rotation.mulMat(scaling));
+        
+        ecs.update(delta);
 
         // const camera = translation.mulMat(rotation.mulMat(perspective));
 
@@ -184,8 +189,6 @@ pub fn main() anyerror!void {
         }
         line_util.point(V3(0, 2, 0), V3(0, 1, 0));
 
-        entity_a.update(delta);
-        entity_b.update(delta);
         line_util.draw(program);
 
         SDL_GL_SwapWindow(window);
