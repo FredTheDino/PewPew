@@ -117,17 +117,23 @@ pub fn main() anyerror!void {
     var ecs = ECS.ECS.create();
     var entity_a = ecs.createWith(
     ECS.Transform{
-        .position = V3(0, 0, 0),
+        .position = V3(0, 0, 0), 
+        .velocity = V3(0, 0, 0),
         .rotation = V3(1, 1, 1),
         .scale = 1.0,
     }, ECS.Drawable{
         .mesh = &cube,
         .program = &program,
-    });
+    }
+    , ECS.Gravity{
+        .speed = -1.0,
+    }
+    );
 
     var entity_b = ecs.createWith(
     ECS.Transform{
         .position = V3(2, 1, 1),
+        .velocity = V3(0, 0, 0),
         .rotation = V3(0, 0, 0),
         .scale = 2.0,
     }, ECS.Drawable{
@@ -164,21 +170,17 @@ pub fn main() anyerror!void {
         const s = math.sin(tick);
         const t = math.cos(tick);
 
-        //entity_b.get(ECS.Component.TRANSFORM).transform.position.x = s;
-        //entity_b.get(ECS.TRANSFORM).position.x = s;
-
         const rotation = Mat4.rotation(x, y, 0);
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
         const view = translation.mulMat(rotation.mulMat(scaling));
         
-        ecs.update(delta);
-
-        // const camera = translation.mulMat(rotation.mulMat(perspective));
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
         program.sendCamera(projection, view);
+
+        ecs.update(delta);
 
         const num = 10;
         const half_num = @divTrunc(num, 2);

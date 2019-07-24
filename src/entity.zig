@@ -7,6 +7,7 @@ const List = @import("std").ArrayList;
 
 pub const Transform = struct {
     position: Vec3,
+    velocity: Vec3, // ??? This is probably not a good idea...
     rotation: Vec3,
     scale: f32,
 
@@ -25,28 +26,47 @@ pub const Drawable = struct {
     pub fn draw(self: Drawable, entity: *Entity) void {
         // TODO: Is this needed?
         self.program.bind();
-        if (entity.has(TRANSFORM)) {
-            const c = entity.get(TRANSFORM);
+        if (entity.has(CT.transform)) {
+            const c = entity.get(CT.transform);
             self.program.sendModel(c.transform.toMat());
         }
         self.mesh.drawTris();
     }
 };
 
-pub const TRANSFORM = C{ .transform = undefined };
-pub const DRAWABLE = C{ .drawable = undefined };
+pub const Gravity = struct {
+    speed: f32,
 
+    pub fn update(self: Gravity, entity: *Entity, delta: f32) void {
+        // Do nothing if I don't have a Transform component
+        if (!entity.has(CT.transform)) return;
+        const t: *Transform = &entity.get(CT.transform).transform;
+        t.velocity = t.velocity.add(V3(0, self.speed * delta, 0));
+        t.position = t.position.add(t.velocity.scale(delta));
+    }
+};
+
+const CT = ComponentType;
 const C = Component;
-pub const Component = union(enum) {
+
+pub const ComponentType = enum {
+    transform,
+    drawable,
+    gravity,
+};
+
+pub const Component = union(ComponentType) {
     // TODO: Can I make this into a macro somehow?
     transform: Transform,
     drawable: Drawable,
+    gravity: Gravity,
 
     fn noop() void {}
 
     fn update(self: C, entity: *Entity, delta: f32) void {
         switch (self) {
-            C.drawable => |c| c.draw(entity),
+            C.drawable => |a| a.draw(entity),
+            C.gravity => |b| b.update(entity, delta),
             C.transform => noop(),
         }
     }
@@ -59,7 +79,13 @@ pub const Component = union(enum) {
             Transform => C{
                 .transform = component,
             },
-            else => unreachable,
+            Gravity => C{
+                .gravity = component,
+            },
+            else => {
+                std.debug.warn("FOREGOT TO ADD TO WRAP\n");
+                unreachable;
+            },
         };
     }
 };
@@ -102,15 +128,15 @@ pub const Entity = struct {
         self.components[pos] = wrapped;
     }
 
-    pub fn has(self: Entity, comptime component: C) bool {
+    pub fn has(self: Entity, comptime component: CT) bool {
         return self.active_components[@enumToInt(component)];
     }
 
     // TODO: Is there someway to wrap this?
     // Should I make explicit methods for each component?
     // As it is now I think it works... A tad verbose though.
-    pub fn get(self: Entity, comptime component: C) C {
-        return self.components[@enumToInt(component)];
+    pub fn get(self: *Entity, comptime component: CT) *C {
+        return &self.components[@enumToInt(component)];
     }
 
     pub fn update(self: *Entity, delta: f32) void {
@@ -129,8 +155,8 @@ pub const EntityID = struct {
         return self.pos >= 0;
     }
 
-    pub fn get(self: EntityID, system: *ECS) ?*Entity {
-        return system.get(self);
+    pub fn get(self: EntityID, ecs: *ECS) ?*Entity {
+        return ecs.get(self);
     }
 };
 
@@ -167,7 +193,7 @@ pub const ECS = struct {
                 .gen = 0,
             };
             // TODO: Is this needed?
-            self.entities.ensureCapacity(@intCast(usize, id.pos + 1)) catch |err| switch(err) {
+            self.entities.resize(@intCast(usize, id.pos + 2)) catch |err| switch(err) {
                 error.OutOfMemory => return null,
             };
             self.next_free += 1;
@@ -180,10 +206,10 @@ pub const ECS = struct {
     // TODO: Remove method
     
     // TODO: Is this redundant? It can be stored on the ID.
-    pub fn get(self: *ECS, id: EntityID) ?*EntityID {
-        var e = self.entities.get(id.pos) catch return null;
+    pub fn get(self: *ECS, id: EntityID) ?*Entity {
+        var e = self.entities.at(@intCast(usize, id.pos));
         if (e.id.gen != id.gen) return null;
-        return e;
+        return &e;
     }
 
     pub fn createWith(self: *ECS, args: ...) EntityID {
@@ -197,8 +223,8 @@ pub const ECS = struct {
     pub fn update(self: *ECS, delta: f32) void {
         var i: usize = 0;
         while (i < self.entities.count()): (i += 1) {
-            var e = self.entities.at(i);
-            if (!e.id.isAlive()) continue;
+            var e: *Entity = &self.entities.toSlice()[i];
+            if (!e.id.isAlive() or e.id.pos != @intCast(i32, i)) continue;
             e.update(delta);
         }
     }

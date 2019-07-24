@@ -177,6 +177,7 @@ pub const Mat4 = packed struct {
                 out.v[row][col] = self.v[col][row];
             }
         }
+        return out;
     }
 
     pub fn equalsAcc(self: Mat4, other: Mat4, acc: real) bool {
