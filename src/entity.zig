@@ -99,7 +99,7 @@ pub const Entity = struct {
     active_components: [@memberCount(C)]bool,
     components: [@memberCount(C)]C,
 
-    pub fn create(self: *ECS) Entity {
+    pub fn init(self: *ECS) Entity {
         var e = Entity{
             .active_components = []bool{false} ** @memberCount(C),
             .components = undefined,
@@ -109,23 +109,27 @@ pub const Entity = struct {
         return e;
     }
 
-    pub fn addAll(self: *Entity, args: ...) void {
+    pub fn add(self: *Entity, args: ...) void {
         comptime var i = 0;
         inline while (i < args.len) : (i += 1) {
-            self.add(args[i]);
+            var component = args[i];
+            var wrapped: Component = undefined;
+            if (@typeOf(component) == C) {
+                wrapped = component;
+            } else {
+                wrapped = C.wrap(component);
+            }
+            const pos = @enumToInt(wrapped);
+            self.active_components[pos] = true;
+            self.components[pos] = wrapped;
         }
     }
 
-    pub fn add(self: *Entity, component: var) void {
-        var wrapped: Component = undefined;
-        if (@typeOf(component) == C) {
-            wrapped = component;
-        } else {
-            wrapped = C.wrap(component);
+    pub fn remove(self: *Entity, args: ...) void {
+        comptime var i = 0;
+        inline while (i < args.len) : (i += 1) {
+            self.active_components[@enumToInt(args[i])] = false;
         }
-        const pos = @enumToInt(wrapped);
-        self.active_components[pos] = true;
-        self.components[pos] = wrapped;
     }
 
     pub fn has(self: Entity, comptime component: CT) bool {
@@ -169,7 +173,7 @@ pub const ECS = struct {
     entities: EntityList,
     next_free: i32,
 
-    pub fn create() ECS {
+    pub fn init() ECS {
         return ECS{
             .entities = EntityList.init(A),
             .next_free = 0,
@@ -212,9 +216,9 @@ pub const ECS = struct {
         return &e;
     }
 
-    pub fn createWith(self: *ECS, args: ...) EntityID {
-        var e = Entity.create(self);
-        e.addAll(args);
+    pub fn create(self: *ECS, args: ...) EntityID {
+        var e = Entity.init(self);
+        e.add(args);
         var id = self.genId(&e) orelse return EntityID{ .pos = -1, .gen = 0, };
         self.entities.set(@intCast(usize, id.pos), e);
         return id;

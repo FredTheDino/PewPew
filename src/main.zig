@@ -17,8 +17,8 @@ pub const ECS = @import("entity.zig");
 //    - Entity System
 //    - Compile time model loading
 //    - Loading .png
-//    - Asset system?
 //    - Sound thread
+//    - Asset system?
 //    - Begin on actual game
 //
 // Maybes:
@@ -114,8 +114,8 @@ pub fn main() anyerror!void {
         0, 5, 1,     0, 5, 4,
     });
 
-    var ecs = ECS.ECS.create();
-    var entity_a = ecs.createWith(
+    var ecs = ECS.ECS.init();
+    var entity_a = ecs.create(
     ECS.Transform{
         .position = V3(0, 0, 0), 
         .velocity = V3(0, 0, 0),
@@ -124,13 +124,11 @@ pub fn main() anyerror!void {
     }, ECS.Drawable{
         .mesh = &cube,
         .program = &program,
-    }
-    , ECS.Gravity{
+    }, ECS.Gravity{
         .speed = -1.0,
-    }
-    );
+    });
 
-    var entity_b = ecs.createWith(
+    var entity_b = ecs.create(
     ECS.Transform{
         .position = V3(2, 1, 1),
         .velocity = V3(0, 0, 0),
