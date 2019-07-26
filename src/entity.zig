@@ -1,7 +1,7 @@
 use @import("import.zig");
 
 const Shader = @import("shader.zig").Shader;
-const Mesh = @import("mesh.zig").Mesh; 
+const Mesh = @import("mesh.zig").Mesh;
 
 const List = @import("std").ArrayList;
 
@@ -169,7 +169,7 @@ pub const ECS = struct {
     // Add / Remove / Get
     const EntityList = List(Entity);
     const IDList = List(EntityID);
-    
+
     entities: EntityList,
     next_free: i32,
 
@@ -180,48 +180,55 @@ pub const ECS = struct {
         };
     }
 
-    //
-    pub fn genId(self: *ECS, e: *Entity) ?EntityID {
+    fn genId(self: *ECS) ?EntityID {
         var id = EntityID{ .pos = 0, .gen = 0, };
         if (self.next_free < 0) {
-            const i = @intCast(usize, 1 - self.next_free);
-            const next_id = self.entities.at(i).id;
-            id = EntityID{
-                .pos = @intCast(i32, i),
-                .gen = next_id.gen + 1,
-            };
-            self.next_free = -(1 + next_id.pos);
+            const i = @intCast(usize, -(1 + self.next_free));
+            id = self.entities.at(i).id;
+            self.next_free = id.pos;
+            id.pos = @intCast(i32, i);
         } else {
             id = EntityID{
                 .pos = self.next_free,
                 .gen = 0,
             };
             // TODO: Is this needed?
-            self.entities.resize(@intCast(usize, id.pos + 2)) catch |err| switch(err) {
+            _ = self.entities.addOne()
+            catch |err| switch(err) {
                 error.OutOfMemory => return null,
             };
             self.next_free += 1;
         }
-        e.id = id;
-        // TODO: Might be smart to add it here..
         return id;
     }
 
-    // TODO: Remove method
-    
+
     // TODO: Is this redundant? It can be stored on the ID.
     pub fn get(self: *ECS, id: EntityID) ?*Entity {
-        var e = self.entities.at(@intCast(usize, id.pos));
-        if (e.id.gen != id.gen) return null;
-        return &e;
+        var e: *Entity = &self.entities.toSlice()[@intCast(usize, id.pos)];
+        if (e.id.gen != id.gen or e.id.pos != id.pos) return null;
+        return e;
     }
 
     pub fn create(self: *ECS, args: ...) EntityID {
         var e = Entity.init(self);
         e.add(args);
-        var id = self.genId(&e) orelse return EntityID{ .pos = -1, .gen = 0, };
+        var id = self.genId() orelse unreachable; // return EntityID{ .pos = -1, .gen = 0, };
+        e.id = id;
         self.entities.set(@intCast(usize, id.pos), e);
         return id;
+    }
+
+    pub fn remove(self: *ECS, args: ...) void {
+        comptime var i = 0;
+        inline while(i < args.len) : (i += 1) {
+            const id = args[i];
+            const e: *Entity = self.get(id) orelse continue;
+            const curr = self.next_free;
+            self.next_free = -(1 + e.id.pos);
+            e.id.pos = curr;
+            e.id.gen += 1;
+        }
     }
 
     pub fn update(self: *ECS, delta: f32) void {

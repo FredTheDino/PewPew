@@ -110,14 +110,14 @@ pub fn main() anyerror!void {
         5, 1, 2,     5, 2, 6,
         // Top
         3, 7, 6,     3, 6, 2,
-        // Bottom    
+        // Bottom
         0, 5, 1,     0, 5, 4,
     });
 
     var ecs = ECS.ECS.init();
     var entity_a = ecs.create(
     ECS.Transform{
-        .position = V3(0, 0, 0), 
+        .position = V3(0, 0, 0),
         .velocity = V3(0, 0, 0),
         .rotation = V3(1, 1, 1),
         .scale = 1.0,
@@ -127,6 +127,27 @@ pub fn main() anyerror!void {
     }, ECS.Gravity{
         .speed = -1.0,
     });
+
+    {
+        ecs.remove(entity_a);
+        std.debug.warn("SOMETHING\n");
+        var i: usize = 0;
+        while (i < 10) : (i += 1) {
+ecs.remove(entity_a);
+            entity_a = ecs.create(
+            ECS.Transform{
+                .position = V3(@intToFloat(f32, i), 0, 0),
+                .velocity = V3(0, @intToFloat(f32, i), 0),
+                .rotation = V3(1, 1, 1),
+                .scale = 1.0,
+            }, ECS.Drawable{
+                .mesh = &cube,
+                .program = &program,
+            }, ECS.Gravity{
+                .speed = -1.0,
+            });
+        }
+    }
 
     var entity_b = ecs.create(
     ECS.Transform{
@@ -138,6 +159,7 @@ pub fn main() anyerror!void {
         .mesh = &cube,
         .program = &program,
     });
+
 
     var line_util = DebugDraw.init();
 
@@ -172,7 +194,7 @@ pub fn main() anyerror!void {
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
         const view = translation.mulMat(rotation.mulMat(scaling));
-        
+
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
