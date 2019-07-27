@@ -7,7 +7,7 @@ pub const Input = struct {
     pub fn InputHandler(comptime Keys: type) type {
         return struct {
             const Self = @This();
-            
+
             const State = enum(u2) {
                 PRESSED  = 0b11,
                 DOWN     = 0b01,
@@ -27,7 +27,7 @@ pub const Input = struct {
             states: [@memberCount(Keys)]State,
             onResize: fn (x: i32, y: i32) void,
 
-            pub fn create(onResize: fn (x: i32, y: i32) void) Self {
+            pub fn init(onResize: fn (x: i32, y: i32) void) Self {
                 return Self {
                     .states = undefined,
                     .onResize = onResize,
@@ -59,14 +59,14 @@ pub const Input = struct {
                     }
                 }
             }
-            
+
             pub fn process(self: *Self, key: i32, state: State) void {
                 const event = Keys.map(key);
                 if (event == Keys.NONE)
                     return;
                 const current = self.states[@enumToInt(event)];
                 if (!current.isSameState(state)) {
-                   self.states[@enumToInt(event)] = state; 
+                   self.states[@enumToInt(event)] = state;
                 }
             }
 

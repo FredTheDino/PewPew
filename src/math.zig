@@ -33,7 +33,7 @@ pub fn V4(x: real, y: real, z: real, w: real) Vec4 {
 
 pub fn M4(a: real, b: real, c: real, d: real,
           e: real, f: real, g: real, h: real,
-          i: real, j: real, k: real, l: real, 
+          i: real, j: real, k: real, l: real,
           m: real, n: real, o: real, p: real) Mat4 {
     var mat: Mat4 = undefined;
     mat.v[0][0] = a;
@@ -55,6 +55,123 @@ pub fn M4(a: real, b: real, c: real, d: real,
     return mat;
 }
 
+pub fn AA(v: Vec3, angle: real) Quat {
+    const half_angle = angle / 2.0;
+    return Quat{
+        .v = v.normalized().scale(math.sin(half_angle)),
+        .w = math.cos(half_angle),
+    };
+}
+
+
+pub fn H(x: real, y: real, z: real, w: real) Quat {
+    return Quat{
+        .v = Vec3{
+            .x = x,
+            .y = y,
+            .z = z,
+        },
+        .w = w,
+    };
+}
+
+// NOTE: Cannot be uploaded to OpenGL directly,
+// since it's not packed!!!!
+pub const Quat = struct {
+    v: Vec3,
+    w: real,
+
+    pub fn identity() Quat {
+        return H(0, 0, 0, 1);
+    }
+
+    pub fn byVector(a: Quat, v: Vec3, delta: f32) Quat {
+        const half_delta = delta / 2;
+        const b = H(v.x, v.y, v.z, 0);
+        return a.add(b.mul(a).scale(half_delta)).normalized();
+    }
+
+    pub fn add(a: Quat, b: Quat) Quat {
+        return Quat{
+            .v = a.v.add(b.v),
+            .w = a.w + b.w,
+        };
+    }
+
+    pub fn mul(a: Quat, b: Quat) Quat {
+        return Quat{
+            // v x v' + w' v + w v'
+            .v = a.v.cross(b.v).add(b.v.scale(a.w)).add(a.v.scale(b.w)),
+            .w = a.w * b.w - a.v.dot(b.v),
+        };
+    }
+
+    pub fn scale(a: Quat, b: real) Quat {
+        return Quat{
+            .v = a.v.scale(b),
+            .w = a.w * b,
+        };
+    }
+
+    pub fn lengthSq(a: Quat) real {
+        return a.w * a.w + a.v.lengthSq();
+    }
+
+    pub fn length(a: Quat) real {
+        return @sqrt(real, @inlineCall(lengthSq, a));
+    }
+
+    pub fn fastNormalized(a: Quat) Quat {
+        // Inaccurate when |a| is far from 1.0.
+        return a.scale(1.0 / a.lengthSq());
+    }
+
+    pub fn normalized(a: Quat) Quat {
+        return a.scale(1.0 / a.length());
+    }
+
+    pub fn neg(a: Quat) Quat {
+        return Quat{
+            .v = a.v.neg(), // Only flip vector part
+            .w = a.w,
+        };
+    }
+
+    pub fn toMat(in: Quat) Mat4 {
+        // TODO: This might be a good idea, it goes into here for now...
+        const l_sq = in.lengthSq();
+        const d = math.fabs(l_sq - 1);
+        var q: Quat = undefined;
+        if (l_sq == 0.0) {
+            return Mat4.identity();
+        } if (d < 0.01) {
+            q = in;
+        } else if (d < 0.5) {
+            q = in.fastNormalized();
+        } else {
+            q = in.normalized();
+        }
+        const w = q.w;
+        const x = q.v.x;
+        const y = q.v.y;
+        const z = q.v.z;
+        const result = M4(1 - 2 * (y * y + z * z),
+                  2 * (x * y - w * z),
+                  2 * (x * z + w * y), 0,
+
+                  2 * (x * y + w * z),
+                  1 - 2 * (x * x + z * z),
+                  2 * (y * z - w * x), 0,
+
+                  2 * (x * z - w * y),
+                  2 * (y * z + w * x),
+                  1 - 2 * (x * x + y * y), 0,
+
+                  0, 0, 0, 1);
+        return result;
+    }
+};
+
 pub const Mat4 = packed struct {
     v: [4][4]real,
 
@@ -69,7 +186,7 @@ pub const Mat4 = packed struct {
         const f = 100.0; // Far clipping plane
         const n = 1.0; // Near clipping plane
         const t = math.tan(fov * (math.pi / 180.0) / 2.0);
-        const s = n / t; 
+        const s = n / t;
 
         var out = identity();
 
@@ -122,7 +239,7 @@ pub const Mat4 = packed struct {
     pub fn scale(x: f32, y: f32, z: f32) Mat4 {
         return M4(x, 0, 0, 0,
                   0, y, 0, 0,
-                  0, 0, z, 0, 
+                  0, 0, z, 0,
                   0, 0, 0, 1);
     }
 
@@ -196,6 +313,18 @@ pub const Mat4 = packed struct {
         return @inlineCall(equalsAcc, self, other, accuracy);
     }
 
+    pub fn gfxDump(self: Mat4) void {
+        const line = @import("graphics.zig").DebugDraw.gfx_util.line;
+        const o = V3(self.v[0][3], self.v[1][3], self.v[2][3]);
+        const x = V3(self.v[0][0], self.v[1][0], self.v[2][0]).add(o);
+        const y = V3(self.v[0][1], self.v[1][1], self.v[2][1]).add(o);
+        const z = V3(self.v[0][2], self.v[1][2], self.v[2][2]).add(o);
+        line(o, x, V3(1, 0, 0));
+        line(o, y, V3(0, 1, 0));
+        line(o, z, V3(0, 0, 1));
+        line(o, V3(0, 0, 0), V3(1, 1, 1));
+    }
+
     pub fn dump(self: Mat4) void {
         const warn = @import("std").debug.warn;
         warn("\n");
@@ -212,7 +341,7 @@ test "Mat4" {
     const warn = @import("std").debug.warn;
     var a = Mat4.identity();
     var b = Mat4.identity();
-    var c = a.mulMat(b);
+    var c = a.mul(b);
     assert(c.equals(Mat4.identity()));
 
     a = Mat4.zero();
@@ -255,7 +384,7 @@ pub const Vec2 = packed struct {
     }
 
     pub fn neg(self: Vec2) Vec2 {
-        return Vec2 { 
+        return Vec2 {
             .x = -self.x,
             .y = -self.y,
         };
@@ -314,7 +443,7 @@ pub const Vec2 = packed struct {
     }
 
     pub fn equalsAcc(self: Vec2, other: Vec2, acc: real) bool {
-        return math.fabs(self.x - other.x) < acc and 
+        return math.fabs(self.x - other.x) < acc and
                math.fabs(self.y - other.y) < acc;
     }
 
@@ -337,7 +466,7 @@ pub const Vec3 = packed struct {
     }
 
     pub fn neg(self: Vec3) Vec3 {
-        return Vec3 { 
+        return Vec3 {
             .x = -self.x,
             .y = -self.y,
             .z = -self.z,
@@ -367,7 +496,15 @@ pub const Vec3 = packed struct {
     pub fn dot(self: Vec3, other: Vec3) real {
         return self.x * other.x + self.y * other.y + self.z * other.z;
     }
-    
+
+    pub fn cross(self: Vec3, other: Vec3) Vec3 {
+        return Vec3{
+            .x = self.y * other.z - self.z * other.y,
+            .y = self.z * other.x - self.x * other.z,
+            .z = self.x * other.y - self.y * other.x,
+        };
+    }
+
     pub fn rotateZ(self: Vec3, angle: real) Vec3 {
         const c: real = math.cos(angle);
         const s: real = math.sin(angle);
@@ -413,13 +550,17 @@ pub const Vec3 = packed struct {
     }
 
     pub fn equalsAcc(self: Vec3, other: Vec3, acc: real) bool {
-        return math.fabs(self.x - other.x) < acc and 
+        return math.fabs(self.x - other.x) < acc and
                math.fabs(self.y - other.y) < acc and
                math.fabs(self.z - other.z) < acc;
     }
 
     pub fn equals(self: Vec3, other: Vec3) bool {
         return @inlineCall(equalsAcc, self, other, accuracy);
+    }
+
+    pub fn toV4(self: Vec3, w: real) Vec4 {
+        return V4(self.x, self.y, self.z, w);
     }
 };
 
@@ -439,7 +580,7 @@ pub const Vec4 = packed struct {
     }
 
     pub fn neg(self: Vec4) Vec4 {
-        return Vec4 { 
+        return Vec4 {
             .x = -self.x,
             .y = -self.y,
             .z = -self.z,
@@ -470,10 +611,10 @@ pub const Vec4 = packed struct {
     }
 
     pub fn dot(self: Vec4, other: Vec4) real {
-        return self.x * other.x + self.y * other.y + 
+        return self.x * other.x + self.y * other.y +
                self.z * other.z + self.w + other.w;
     }
-    
+
     pub fn lengthSq(self: Vec4) real {
         return @inlineCall(dot, self, self);
     }
@@ -489,13 +630,17 @@ pub const Vec4 = packed struct {
     }
 
     pub fn equalsAcc(self: Vec4, other: Vec4, acc: real) bool {
-        return math.fabs(self.x - other.x) < acc and 
+        return math.fabs(self.x - other.x) < acc and
                math.fabs(self.y - other.y) < acc and
                math.fabs(self.z - other.z) < acc;
     }
 
     pub fn equals(self: Vec4, other: Vec4) bool {
         return @inlineCall(equalsAcc, self, other, accuracy);
+    }
+
+    pub fn toV3(self: Vec4) Vec3 {
+        return V3(self.x, self.y, self.z);
     }
 };
 

@@ -1,10 +1,7 @@
 use @import("import.zig");
 
 use @import("math.zig");
-const Shader = @import("shader.zig").Shader;
-const DebugDraw = @import("mesh.zig").DebugDraw;
-const Mesh = @import("mesh.zig").Mesh;
-const Vertex = @import("mesh.zig").Vertex;
+const GFX = @import("graphics.zig");
 const Input = @import("input.zig").Input;
 
 var window_width: i32 = 800;
@@ -14,12 +11,14 @@ var window_aspect_ratio: f32 = undefined;
 pub const ECS = @import("entity.zig");
 
 // TODO:
-//    - Entity System
+//    - Entity System (pass 1)
 //    - Compile time model loading
 //    - Loading .png
 //    - Sound thread
 //    - Asset system?
 //    - Begin on actual game
+//        - Movement on plane
+//        - Camera controls, (quaternions needed?)
 //
 // Maybes:
 //    - Hot reloading of assets?
@@ -68,37 +67,41 @@ fn onResize(x: i32, y: i32) void {
 pub fn main() anyerror!void {
     assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == 0);
 
-    var title = c"Hello World";
-    var window = SDL_CreateWindow(title, 0, 0, window_width, window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-
-    var input = Input.InputHandler(Keys).create(onResize);
-
+    const title = c"Hello World";
+    var window = SDL_CreateWindow(title,
+                                  0,
+                                  0,
+                                  window_width,
+                                  window_height,
+                                  SDL_WINDOW_OPENGL);
     var context = SDL_GL_CreateContext(window);
-
     assert(gladLoadGL() != 0);
+
+
 
     onResize(window_width, window_height);
 
+    assert(SDL_GL_SetSwapInterval(1) == 0);
     glEnable(GL_DEPTH_TEST);
 
-    const program = try Shader.compile("res/shader.glsl");
+    const program = try GFX.Shader.compile("res/shader.glsl");
     program.bind();
 
-    const mesh = Mesh.createSimple([]Vertex{
-        Vertex.p(-0.5,  0.5, 0),
-        Vertex.p( 0.0, -0.5, 0),
-        Vertex.p( 0.5,  0.5, 0),
+    const mesh = GFX.Mesh.createSimple([]GFX.Vertex{
+        GFX.Vertex.p(-0.5,  0.5, 0),
+        GFX.Vertex.p( 0.0, -0.5, 0),
+        GFX.Vertex.p( 0.5,  0.5, 0),
     });
 
-    const cube = Mesh.createIndexed([]Vertex{
-        Vertex.p(-0.5, -0.5, -0.5),
-        Vertex.p(-0.5, -0.5,  0.5),
-        Vertex.p(-0.5,  0.5,  0.5),
-        Vertex.p(-0.5,  0.5, -0.5),
-        Vertex.p( 0.5, -0.5, -0.5),
-        Vertex.p( 0.5, -0.5,  0.5),
-        Vertex.p( 0.5,  0.5,  0.5),
-        Vertex.p( 0.5,  0.5, -0.5),
+    const cube = GFX.Mesh.createIndexed([]GFX.Vertex{
+        GFX.Vertex.p(-0.5, -0.5, -0.5),
+        GFX.Vertex.p(-0.5, -0.5,  0.5),
+        GFX.Vertex.p(-0.5,  0.5,  0.5),
+        GFX.Vertex.p(-0.5,  0.5, -0.5),
+        GFX.Vertex.p( 0.5, -0.5, -0.5),
+        GFX.Vertex.p( 0.5, -0.5,  0.5),
+        GFX.Vertex.p( 0.5,  0.5,  0.5),
+        GFX.Vertex.p( 0.5,  0.5, -0.5),
     }, []c_int{
         // Left
         0, 1, 2,     0, 2, 3,
@@ -115,53 +118,22 @@ pub fn main() anyerror!void {
     });
 
     var ecs = ECS.ECS.init();
-    var entity_a = ecs.create(
-    ECS.Transform{
-        .position = V3(0, 0, 0),
-        .velocity = V3(0, 0, 0),
-        .rotation = V3(1, 1, 1),
-        .scale = 1.0,
-    }, ECS.Drawable{
+
+    var entity_c = ecs.create(
+    ECS.Transform.at(V3(0, 0, 0)),
+    ECS.Drawable{
         .mesh = &cube,
         .program = &program,
     }, ECS.Gravity{
-        .speed = -1.0,
+        .acceleration = -1.0,
+    }, ECS.Movable{
+        .linear = V3(0, 1, 0),
+        .rotational = V3(0, 1, 0),
     });
 
-    {
-        ecs.remove(entity_a);
-        std.debug.warn("SOMETHING\n");
-        var i: usize = 0;
-        while (i < 10) : (i += 1) {
-ecs.remove(entity_a);
-            entity_a = ecs.create(
-            ECS.Transform{
-                .position = V3(@intToFloat(f32, i), 0, 0),
-                .velocity = V3(0, @intToFloat(f32, i), 0),
-                .rotation = V3(1, 1, 1),
-                .scale = 1.0,
-            }, ECS.Drawable{
-                .mesh = &cube,
-                .program = &program,
-            }, ECS.Gravity{
-                .speed = -1.0,
-            });
-        }
-    }
+    var input = Input.InputHandler(Keys).init(onResize);
 
-    var entity_b = ecs.create(
-    ECS.Transform{
-        .position = V3(2, 1, 1),
-        .velocity = V3(0, 0, 0),
-        .rotation = V3(0, 0, 0),
-        .scale = 2.0,
-    }, ECS.Drawable{
-        .mesh = &cube,
-        .program = &program,
-    });
-
-
-    var line_util = DebugDraw.init();
+    var gfx_util = GFX.DebugDraw.init();
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -172,6 +144,7 @@ ecs.remove(entity_a);
         const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
         delta = tick - last_tick;
         last_tick = tick;
+
 
         input.update();
         if (input.isDown(Keys.QUIT))
@@ -190,6 +163,8 @@ ecs.remove(entity_a);
         const s = math.sin(tick);
         const t = math.cos(tick);
 
+        entity_c.deNoNull().getMoveable().rotational.x = s;
+
         const rotation = Mat4.rotation(x, y, 0);
         const translation = Mat4.translation(V3(0, 0, -3));
         const scaling = Mat4.identity();
@@ -200,20 +175,13 @@ ecs.remove(entity_a);
         program.update();
         program.sendCamera(projection, view);
 
+        gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+        gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+        gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+
         ecs.update(delta);
-
-        const num = 10;
-        const half_num = @divTrunc(num, 2);
-        comptime var i = -half_num;
-        inline while (i <= half_num) : (i += 1) {
-            line_util.line(V3(-half_num, 0, i), V3(half_num, 0, i), V3(1, 0, 0));
-            line_util.line(V3(i, 0, -half_num), V3(i, 0, half_num), V3(0, 0, 1));
-        }
-        line_util.point(V3(0, 2, 0), V3(0, 1, 0));
-
-        line_util.draw(program);
+        gfx_util.draw(program);
 
         SDL_GL_SwapWindow(window);
-        SDL_Delay(10);
     }
 }

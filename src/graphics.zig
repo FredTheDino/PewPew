@@ -1,6 +1,7 @@
 use @import("import.zig");
 
-const Shader = @import("shader.zig").Shader;
+pub const Shader = @import("shader.zig").Shader;
+
 pub const Vertex = packed struct {
     x: f32,
     y: f32,
@@ -15,6 +16,7 @@ pub const Vertex = packed struct {
 };
 
 pub const DebugDraw = struct {
+    pub var gfx_util: DebugDraw = undefined;
     const MAX_LINES = 100;
     line_mesh: Mesh,
     line_colors: [MAX_LINES]Vec3,
@@ -25,13 +27,12 @@ pub const DebugDraw = struct {
     point_colors: [MAX_POINTS]Vec3,
     points_used: usize,
 
-    pub fn init() DebugDraw {
-        var self: DebugDraw = undefined;
-        self.line_mesh = Mesh.createEmpty(MAX_LINES * 2);
-        self.lines_used = 0;
-        self.point_mesh = Mesh.createEmpty(MAX_POINTS);
-        self.points_used = 0;
-        return self;
+    pub fn init() *DebugDraw {
+        gfx_util.line_mesh = Mesh.createEmpty(MAX_LINES * 2);
+        gfx_util.lines_used = 0;
+        gfx_util.point_mesh = Mesh.createEmpty(MAX_POINTS);
+        gfx_util.points_used = 0;
+        return &gfx_util;
     }
 
     pub fn point(self: *DebugDraw, p: Vec3, color: Vec3) void {
