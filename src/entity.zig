@@ -33,6 +33,7 @@ pub const Transform = struct {
 pub const Movable = struct {
     linear: Vec3,
     rotational: Vec3,
+    damping: f32,
 
     pub fn still() Movable {
         return Movable{
@@ -44,8 +45,12 @@ pub const Movable = struct {
     pub fn update(self: Movable, entity: *Entity, delta: f32) void {
         if (!entity.has(CT.transform)) return;
         var t: *Transform = entity.getTransform();
-        t.position = t.position.add(self.linear.scale(delta));
-        t.rotation = t.rotation.byVector(self.rotational, delta);
+        var m: *Movable = entity.getMoveable();
+        t.position = t.position.add(m.linear.scale(delta));
+        t.rotation = t.rotation.byVector(m.rotational, delta);
+        const damping = math.pow(f32, 1 - m.damping, delta);
+        m.linear = m.linear.scale(damping);
+        m.rotational = m.rotational.scale(damping);
     }
 };
 
@@ -103,6 +108,7 @@ pub const Component = union(ComponentType) {
             C.gravity => |c| c.update(entity, delta),
             C.movable => |c| c.update(entity, delta),
             C.transform => noop(),
+            else => noop(),
         }
     }
 

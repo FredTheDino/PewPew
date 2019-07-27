@@ -129,6 +129,7 @@ pub fn main() anyerror!void {
     }, ECS.Movable{
         .linear = V3(0, 1, 0),
         .rotational = V3(0, 1, 0),
+        .damping = 0.1,
     });
 
     var input = Input.InputHandler(Keys).init(onResize);
