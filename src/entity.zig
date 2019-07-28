@@ -2,6 +2,8 @@
 /// at play at a time. Some convenience methods will not work
 /// if there are more than that.
 use @import("import.zig");
+const InputHandler = @import("main.zig").InputHandler;
+const Keys = InputHandler.KeyType;
 
 // TODO(ed): Maybe add a way to add requirements to components,
 // since they require each other.
@@ -39,6 +41,7 @@ pub const Movable = struct {
         return Movable{
             .linear = V3(0, 0, 0),
             .rotational = V3(0, 0, 0),
+            .damping = 0.0
         };
     }
 
@@ -51,6 +54,98 @@ pub const Movable = struct {
         const damping = math.pow(f32, 1 - m.damping, delta);
         m.linear = m.linear.scale(damping);
         m.rotational = m.rotational.scale(damping);
+    }
+};
+
+pub const Player = struct {
+    // Camera
+    const FLOOR_HEIGHT: f32 = 0;
+    var input: *InputHandler = undefined;
+    yaw: f32,
+    pitch: f32,
+
+    height: f32,
+    speed: f32,
+    jump_speed: f32,
+    gravity: f32,
+
+    pub fn create(input_ptr: *InputHandler) Player {
+        input = input_ptr;
+        return Player{
+            .yaw = 0,
+            .pitch = 0,
+            .height = 1.5,
+            .speed = 10.0,
+            .jump_speed = 8.0,
+            .gravity = -10.0,
+        };
+    }
+
+    pub fn update(self: Player, entity: *Entity, delta: f32) void {
+        // TODO: Agressive, it crashes if it doesn't exist, is this smart?
+        const movable: *Movable = entity.getMoveable();
+        // NOTE: Position for feet!
+        const transform: *Transform = entity.getTransform();
+        const player: *Player = entity.getPlayer();
+        // TODO: Acceleration
+
+        var movement: Vec4 = V4(0, 0, 0, 0);
+        if (input.isDown(Keys.RIGHT)) {
+            movement.x += self.speed * delta;
+        }
+
+        if (input.isDown(Keys.LEFT)) {
+            movement.x -= self.speed * delta;
+        }
+
+        if (input.isDown(Keys.UP)) {
+            movement.z -= self.speed * delta;
+        }
+
+        if (input.isDown(Keys.DOWN)) {
+            movement.z += self.speed * delta;
+        }
+
+        const rotation = Mat4.rotation(0, self.yaw, 0);
+        movable.linear = movable.linear.add(rotation.mulVec(movement).toV3());
+
+        const damping = math.pow(f32, 1.0 - 0.9, delta);
+        const y_vel = movable.linear.y;
+        movable.linear = movable.linear.scale(damping);
+        movable.linear.y = y_vel;
+
+        if (input.isDown(Keys.P_PITCH)) {
+            player.pitch += delta;
+        }
+
+        if (input.isDown(Keys.N_PITCH)) {
+            player.pitch -= delta;
+        }
+
+        if (input.isDown(Keys.P_YAW)) {
+            player.yaw += delta;
+        }
+
+        if (input.isDown(Keys.N_YAW)) {
+            player.yaw -= delta;
+        }
+
+        if (transform.position.y <= FLOOR_HEIGHT) {
+            transform.position.y = 0;
+            movable.linear.y = 0;
+            if (input.isPressed(Keys.JUMP)) {
+                movable.linear.y = self.jump_speed;
+            }
+        } else {
+            movable.linear.y += self.gravity * delta;
+        }
+    }
+
+    pub fn getViewMatrix(self: Player, entity: *Entity) Mat4 {
+        const pos = entity.getTransform().position;
+        const translation = Mat4.translation(V3(0, self.height, 0).sub(pos));
+        const rotation = Mat4.rotation(self.pitch, self.yaw, 0);
+        return rotation.mulMat(translation);
     }
 };
 
@@ -74,9 +169,8 @@ pub const Gravity = struct {
     acceleration: f32,
 
     pub fn update(self: Gravity, entity: *Entity, delta: f32) void {
-        if (!entity.has(CT.transform)) return;
-        if (!entity.has(CT.movable)) return;
-        entity.getMoveable().linear.y += self.acceleration * delta;
+        // TODO: Remove this.
+        unreachable;
     }
 };
 
@@ -88,6 +182,7 @@ pub const ComponentType = enum {
     transform,
     gravity,
     movable,
+    player,
 
     drawable,
 };
@@ -97,6 +192,7 @@ pub const Component = union(ComponentType) {
     transform: Transform,
     gravity: Gravity,
     movable: Movable,
+    player: Player,
 
     drawable: Drawable,
 
@@ -107,6 +203,7 @@ pub const Component = union(ComponentType) {
             C.drawable => |c| c.draw(entity),
             C.gravity => |c| c.update(entity, delta),
             C.movable => |c| c.update(entity, delta),
+            C.player => |c| c.update(entity, delta),
             C.transform => noop(),
             else => noop(),
         }
@@ -125,6 +222,9 @@ pub const Component = union(ComponentType) {
             },
             Movable => C{
                 .movable = component,
+            },
+            Player => C{
+                .player = component,
             },
             else => {
                 std.debug.warn("FOREGOT TO ADD TO WRAP\n");
@@ -187,6 +287,7 @@ pub const Entity = struct {
     }
 
     // Convenience functions, when you promise things actually exist.
+    // TODO: Maybe actual error messages...
     pub fn getTransform(self: *Entity) *Transform {
         return &(self.get(CT.transform) orelse unreachable).transform;
     }
@@ -201,6 +302,10 @@ pub const Entity = struct {
 
     pub fn getMoveable(self: *Entity) *Movable {
         return &(self.get(CT.movable) orelse unreachable).movable;
+    }
+
+    pub fn getPlayer(self: *Entity) *Player {
+        return &(self.get(CT.player) orelse unreachable).player;
     }
 
     pub fn update(self: *Entity, component: CT, delta: f32) void {

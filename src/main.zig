@@ -10,10 +10,14 @@ var window_aspect_ratio: f32 = undefined;
 
 pub const ECS = @import("entity.zig");
 
-// TODO:
 //    - Entity System (pass 1)
-//    - Compile time model loading
-//    - Loading .png
+// TODO:
+//    - Model loading
+//    - Split screen
+//    - Player Movement (Multi player?)
+//    - Collision
+//    - Controller support?
+//
 //    - Sound thread
 //    - Asset system?
 //    - Begin on actual game
@@ -36,6 +40,11 @@ const Keys = enum {
     UP,
     DOWN,
 
+    P_PITCH,
+    N_PITCH,
+    P_YAW,
+    N_YAW,
+
     /// This is the mapping function that
     /// takes an SDL input and returns the
     /// corresponding enum.
@@ -45,6 +54,13 @@ const Keys = enum {
             SDLK_d => Keys.RIGHT,
             SDLK_w => Keys.UP,
             SDLK_s => Keys.DOWN,
+
+            SDLK_e => Keys.P_PITCH,
+            SDLK_q => Keys.N_PITCH,
+
+            SDLK_1 => Keys.P_YAW,
+            SDLK_2 => Keys.N_YAW,
+
             SDLK_LEFT => Keys.LEFT,
             SDLK_RIGHT => Keys.RIGHT,
             SDLK_SPACE => Keys.JUMP,
@@ -54,6 +70,7 @@ const Keys = enum {
         };
     }
 };
+pub const InputHandler = Input.InputHandler(Keys);
 
 var projection: Mat4 = undefined;
 fn onResize(x: i32, y: i32) void {
@@ -61,11 +78,12 @@ fn onResize(x: i32, y: i32) void {
     window_width = x;
     window_height = y;
     window_aspect_ratio = @intToFloat(f32, window_width) / @intToFloat(f32, window_height);
-    projection = Mat4.perspective(120, window_aspect_ratio);
+    projection = Mat4.perspective(60, window_aspect_ratio);
 }
 
 pub fn main() anyerror!void {
     assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == 0);
+
 
     const title = c"Hello World";
     var window = SDL_CreateWindow(title,
@@ -74,15 +92,17 @@ pub fn main() anyerror!void {
                                   window_width,
                                   window_height,
                                   SDL_WINDOW_OPENGL);
+    var input = InputHandler.init(onResize);
+
     var context = SDL_GL_CreateContext(window);
     assert(gladLoadGL() != 0);
-
-
 
     onResize(window_width, window_height);
 
     assert(SDL_GL_SetSwapInterval(1) == 0);
     glEnable(GL_DEPTH_TEST);
+
+    var gfx_util = GFX.DebugDraw.init();
 
     const program = try GFX.Shader.compile("res/shader.glsl");
     program.bind();
@@ -94,14 +114,14 @@ pub fn main() anyerror!void {
     });
 
     const cube = GFX.Mesh.createIndexed([]GFX.Vertex{
-        GFX.Vertex.pt(-0.5, -0.5, -0.5,     -0.5, -0.5),
-        GFX.Vertex.pt(-0.5, -0.5,  0.5,     -0.5, -0.5),
-        GFX.Vertex.pt(-0.5,  0.5,  0.5,     -0.5,  0.5),
-        GFX.Vertex.pt(-0.5,  0.5, -0.5,     -0.5,  0.5),
-        GFX.Vertex.pt( 0.5, -0.5, -0.5,      0.5, -0.5),
-        GFX.Vertex.pt( 0.5, -0.5,  0.5,      0.5, -0.5),
-        GFX.Vertex.pt( 0.5,  0.5,  0.5,      0.5,  0.5),
-        GFX.Vertex.pt( 0.5,  0.5, -0.5,      0.5,  0.5),
+        GFX.Vertex.pt(-0.5, -0.5, -0.5,      0.5,  0.5),
+        GFX.Vertex.pt(-0.5, -0.5,  0.5,      0.5,  0.5),
+        GFX.Vertex.pt(-0.5,  0.5,  0.5,      0,  1),
+        GFX.Vertex.pt(-0.5,  0.5, -0.5,      0,  0),
+        GFX.Vertex.pt( 0.5, -0.5, -0.5,      0.5,  0.5),
+        GFX.Vertex.pt( 0.5, -0.5,  0.5,      0.5,  0.5),
+        GFX.Vertex.pt( 0.5,  0.5,  0.5,      1,  1),
+        GFX.Vertex.pt( 0.5,  0.5, -0.5,      1,  0),
     }, []c_int{
         // Left
         0, 1, 2,     0, 2, 3,
@@ -121,22 +141,26 @@ pub fn main() anyerror!void {
 
     var texture = try GFX.Texture.load("res/test.png");
 
-    var entity_c = ecs.create(
-    ECS.Transform.at(V3(0, 0, 0)),
+    var floor = ecs.create(
+    ECS.Transform{
+        .position = V3(0, -5, 0),
+        .rotation = Quat.identity(),
+        .scale = 5,
+    },
     ECS.Drawable{
         .mesh = &cube,
         .program = &program,
-    }, ECS.Gravity{
-        .acceleration = -1.0,
-    }, ECS.Movable{
-        .linear = V3(0, 1, 0),
-        .rotational = V3(0, 1, 0),
-        .damping = 0.1,
     });
 
-    var input = Input.InputHandler(Keys).init(onResize);
-
-    var gfx_util = GFX.DebugDraw.init();
+    var player = ecs.create(
+    ECS.Transform{
+        .position = V3(0, 0, 0),
+        .rotation = Quat.identity(),
+        .scale = 1,
+    },
+    ECS.Movable.still(),
+    ECS.Player.create(&input),
+    );
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -166,26 +190,24 @@ pub fn main() anyerror!void {
         const s = math.sin(tick);
         const t = math.cos(tick);
 
-        entity_c.deNoNull().getMoveable().rotational.x = s;
+        if (false) {
+            const rotation = Mat4.rotation(x, y, 0);
+            const translation = Mat4.translation(V3(0, 0, -3));
+            const scaling = Mat4.identity();
+            const view = translation.mulMat(rotation.mulMat(scaling));
+        }
 
-        const rotation = Mat4.rotation(x, y, 0);
-        const translation = Mat4.translation(V3(0, 0, -3));
-        const scaling = Mat4.identity();
-        const view = translation.mulMat(rotation.mulMat(scaling));
-
+        program.setTexture(0);
+        texture.bind(0);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
+        const view = player.deNoNull().getPlayer().getViewMatrix(player.deNoNull());
         program.sendCamera(projection, view);
 
         gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
-
-        program.sendModel(Mat4.translation(V3(s, t, 0)));
-        program.setTexture(0);
-        texture.bind(0);
-        mesh.drawTris();
 
         ecs.update(delta);
         gfx_util.draw(program);

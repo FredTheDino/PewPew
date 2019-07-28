@@ -205,7 +205,7 @@ pub const Mat4 = packed struct {
 
     pub fn rotation(x: real, y: real, z: real) Mat4 {
         var z_matrix = identity();
-        {
+        if (z != 0) {
             const sin_z = math.sin(z);
             const cos_z = math.cos(z);
             z_matrix.v[0][0] =  cos_z;
@@ -215,7 +215,7 @@ pub const Mat4 = packed struct {
         }
 
         var y_matrix = identity();
-        {
+        if (y != 0) {
             const sin_y = math.sin(y);
             const cos_y = math.cos(y);
             y_matrix.v[0][0] =  cos_y;
@@ -225,7 +225,7 @@ pub const Mat4 = packed struct {
         }
 
         var x_matrix = identity();
-        {
+        if (x != 0) {
             const sin_x = math.sin(x);
             const cos_x = math.cos(x);
             x_matrix.v[1][1] =  cos_x;

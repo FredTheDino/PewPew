@@ -6,6 +6,7 @@ pub const Input = struct {
 
     pub fn InputHandler(comptime Keys: type) type {
         return struct {
+            pub const KeyType = Keys;
             const Self = @This();
 
             const State = enum(u2) {
@@ -72,6 +73,10 @@ pub const Input = struct {
 
             pub fn isDown(self: Self, key: Keys) bool {
                 return self.states[@enumToInt(key)].isSameState(State.DOWN);
+            }
+
+            pub fn isPressed(self: Self, key: Keys) bool {
+                return self.states[@enumToInt(key)].isSameState(State.PRESSED);
             }
         };
     }
