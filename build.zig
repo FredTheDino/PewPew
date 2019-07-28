@@ -9,6 +9,7 @@ pub fn build(b: *Builder) void {
     exe.addLibPath("lib/linux");
     exe.addIncludeDir("inc");
     exe.addCSourceFile("inc/glad/glad.c", [][]const u8{"-std=c99"});
+    exe.addCSourceFile("inc/stb_image_impl.c", [][]const u8{"-std=c99"});
     exe.linkSystemLibrary("c");
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2main");

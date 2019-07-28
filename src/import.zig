@@ -4,8 +4,8 @@ pub use @cImport({
 
     @cInclude("glad/glad.h");
 
-    @cDefine("STBI_ONLY_PNG", "");
     @cDefine("STBI_NO_STDIO", "");
+    @cDefine("STBI_ONLY_PNG", "");
     @cInclude("stb_image.h");
 });
 
@@ -16,7 +16,7 @@ pub const assert = std.debug.assert;
 
 pub use @import("math.zig");
 
-// TODO(Ed): Replace this with something like: 
+// TODO(Ed): Replace this with something like:
 //    var arena = std.heap.DirectAllocator.init();
 //    defer arena.deinit();
 //    const allocator = &arena.allocator;

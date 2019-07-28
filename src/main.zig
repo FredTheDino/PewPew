@@ -88,20 +88,20 @@ pub fn main() anyerror!void {
     program.bind();
 
     const mesh = GFX.Mesh.createSimple([]GFX.Vertex{
-        GFX.Vertex.p(-0.5,  0.5, 0),
-        GFX.Vertex.p( 0.0, -0.5, 0),
-        GFX.Vertex.p( 0.5,  0.5, 0),
+        GFX.Vertex.pt(-0.5,  0.5, 0,     -0.5,  0.5),
+        GFX.Vertex.pt( 0.0, -0.5, 0,      0.0, -0.5),
+        GFX.Vertex.pt( 0.5,  0.5, 0,      0.5,  0.5),
     });
 
     const cube = GFX.Mesh.createIndexed([]GFX.Vertex{
-        GFX.Vertex.p(-0.5, -0.5, -0.5),
-        GFX.Vertex.p(-0.5, -0.5,  0.5),
-        GFX.Vertex.p(-0.5,  0.5,  0.5),
-        GFX.Vertex.p(-0.5,  0.5, -0.5),
-        GFX.Vertex.p( 0.5, -0.5, -0.5),
-        GFX.Vertex.p( 0.5, -0.5,  0.5),
-        GFX.Vertex.p( 0.5,  0.5,  0.5),
-        GFX.Vertex.p( 0.5,  0.5, -0.5),
+        GFX.Vertex.pt(-0.5, -0.5, -0.5,     -0.5, -0.5),
+        GFX.Vertex.pt(-0.5, -0.5,  0.5,     -0.5, -0.5),
+        GFX.Vertex.pt(-0.5,  0.5,  0.5,     -0.5,  0.5),
+        GFX.Vertex.pt(-0.5,  0.5, -0.5,     -0.5,  0.5),
+        GFX.Vertex.pt( 0.5, -0.5, -0.5,      0.5, -0.5),
+        GFX.Vertex.pt( 0.5, -0.5,  0.5,      0.5, -0.5),
+        GFX.Vertex.pt( 0.5,  0.5,  0.5,      0.5,  0.5),
+        GFX.Vertex.pt( 0.5,  0.5, -0.5,      0.5,  0.5),
     }, []c_int{
         // Left
         0, 1, 2,     0, 2, 3,
@@ -118,6 +118,8 @@ pub fn main() anyerror!void {
     });
 
     var ecs = ECS.ECS.init();
+
+    var texture = try GFX.Texture.load("res/test.png");
 
     var entity_c = ecs.create(
     ECS.Transform.at(V3(0, 0, 0)),
@@ -179,6 +181,11 @@ pub fn main() anyerror!void {
         gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+
+        program.sendModel(Mat4.translation(V3(s, t, 0)));
+        program.setTexture(0);
+        texture.bind(0);
+        mesh.drawTris();
 
         ecs.update(delta);
         gfx_util.draw(program);

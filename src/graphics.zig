@@ -1,16 +1,36 @@
 use @import("import.zig");
 
+// TODO: Remove
+
 pub const Shader = @import("shader.zig").Shader;
 
 pub const Vertex = packed struct {
     x: f32,
     y: f32,
     z: f32,
+
+    u: f32,
+    v: f32,
+
     pub fn p(x: f32, y: f32, z: f32) Vertex {
         return Vertex{
             .x = x,
             .y = y,
             .z = z,
+
+            .u = 0,
+            .v = 0,
+        };
+    }
+
+    pub fn pt(x: f32, y: f32, z: f32, u: f32, v: f32) Vertex {
+        return Vertex{
+            .x = x,
+            .y = y,
+            .z = z,
+
+            .u = u,
+            .v = v,
         };
     }
 };
@@ -44,6 +64,9 @@ pub const DebugDraw = struct {
             .x = p.x,
             .y = p.y,
             .z = p.z,
+
+            .u = 0,
+            .v = 0,
         });
     }
 
@@ -56,11 +79,17 @@ pub const DebugDraw = struct {
             .x = a.x,
             .y = a.y,
             .z = a.z,
+
+            .u = 0,
+            .v = 0,
         });
         self.line_mesh.append(Vertex{
             .x = b.x,
             .y = b.y,
             .z = b.z,
+
+            .u = 0,
+            .v = 0,
         });
     }
 
@@ -85,6 +114,61 @@ pub const DebugDraw = struct {
         self.point_mesh.clear();
         self.points_used = 0;
         shader.disableColor();
+    }
+};
+
+pub const Texture = struct {
+    gl_texture: c_uint,
+    width: u32,
+    height: u32,
+
+    pub fn load(path: []const u8) !Texture {
+        const warn = @import("std").debug.warn;
+        const File = @import("std").os.File;
+        var texture: Texture = undefined;
+
+        var file = try File.openRead(path);
+        var file_size = try File.getEndPos(file);
+        var buffer = try A.alloc(u8, file_size);
+        defer A.free(buffer);
+
+        _ = try File.read(file, buffer);
+        var data = stbi_load_from_memory(@ptrCast(* u8, buffer.ptr),
+                                         @intCast(c_int, file_size),
+                                         @ptrCast(*c_int, &texture.width),
+                                         @ptrCast(*c_int, &texture.height),
+                                         @intToPtr(*allowzero c_int, 0),
+                                         0);
+        glGenTextures(1, &texture.gl_texture);
+        glBindTexture(GL_TEXTURE_2D, texture.gl_texture);
+
+        // TODO: Way to change these when loading or maybe afterwards...
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_RGBA,
+                     @intCast(c_int, texture.width),
+                     @intCast(c_int, texture.height),
+                     @intCast(c_int, 0),
+                     GL_RGBA,
+                     GL_UNSIGNED_BYTE,
+                     @ptrCast(*const c_void, data));
+        // Is this really needed?
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        stbi_image_free(@ptrCast(*c_void, data));
+        return texture;
+    }
+
+    pub fn bind(self: Texture, target: u8) void {
+        glActiveTexture(GL_TEXTURE0 + @intCast(c_uint, target));
+        glBindTexture(GL_TEXTURE_2D, self.gl_texture);
     }
 };
 
@@ -131,6 +215,8 @@ pub const Mesh = struct {
 
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
 
         glBindVertexArray(0);
         return mesh;
@@ -152,6 +238,8 @@ pub const Mesh = struct {
 
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
 
         glBindVertexArray(0);
         return mesh;
@@ -176,12 +264,25 @@ pub const Mesh = struct {
 
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
 
         glBindVertexArray(0);
         return mesh;
     }
 
     pub fn drawTris(self: Mesh) void {
+        // Fake transparency, looks really cool..
+        // glEnable(GL_POLYGON_STIPPLE);
+        // var pattern = []u32 {0} ** 32;
+        // for (pattern) |_, i| {
+        //     if (i % 2 == 0) {
+        //         pattern[i] = 0xAAAAAAAA;
+        //     } else {
+        //         pattern[i] = 0x55555555;
+        //     }
+        // }
+        // glPolygonStipple(@ptrCast(*const u8, &pattern));
         glBindVertexArray(self.gl_object);
         const length = @intCast(c_int, self.draw_length);
         if (self.gl_indexbuffer == 0) {

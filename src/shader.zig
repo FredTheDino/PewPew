@@ -8,30 +8,30 @@ pub const Shader = struct {
 
     program: c_uint,
 
-    /// Quick and dirty string replace, has sever 
+    /// Quick and dirty string replace, has sever
     /// limitations since the replacement
     /// and find string has to be the same length.
-    fn replace(str: []u8, 
-            find: [] const u8, 
+    fn replace(str: []u8,
+            find: [] const u8,
             replacement: [] const u8) void {
         assert(find.len == replacement.len);
         var i: u32 = 0;
 outer:
         while (i < str.len) : ({ i += 1; }) {
-            for (find) |c, j| {
-                if (c != str[i + j])
+            for (find) |ch, j| {
+                if (ch != str[i + j])
                     continue :outer;
             }
-            for (replacement) |c, j| {
-                str[i + j] = c;
+            for (replacement) |ch, j| {
+                str[i + j] = ch;
             }
         }
     }
 
     /// Compiles a Vertex or Fragment shader.
     fn compile_shader(path: []const u8,
-                      shader_type: c_uint, 
-                      source_ptr: ?[*]const u8, 
+                      shader_type: c_uint,
+                      source_ptr: ?[*]const u8,
                       source_len: c_int) !c_uint {
         const shader = glCreateShader(shader_type);
         glShaderSource(shader, 1, &source_ptr, &source_len);
@@ -44,7 +44,7 @@ outer:
         var error_buffer: [] u8 = A.alloc(u8, 512) catch unreachable;
         var length: c_int = @intCast(c_int, error_buffer.len);
         glGetShaderInfoLog(shader, length, &length, error_buffer.ptr);
-        std.debug.warn("Compilation failed \"{}({})\":\n\t{}", 
+        std.debug.warn("Compilation failed \"{}({})\":\n\t{}",
                        path,
                        shader_type == GL_VERTEX_SHADER,
                        error_buffer[0..@intCast(usize, length)]);
@@ -59,6 +59,7 @@ outer:
         var file = try File.openRead(path);
         var file_size = try File.getEndPos(file);
         var buffer = try A.alloc(u8, file_size);
+        defer A.free(buffer);
         var read = File.read(file, buffer);
 
 
@@ -91,14 +92,14 @@ outer:
         var ok: c_int = undefined;
         glGetProgramiv(shader_program.program, GL_LINK_STATUS, &ok);
         if (ok != 0) return shader_program;
-        
+
         var error_buffer: [] u8 = A.alloc(u8, 512) catch unreachable;
         var length = @intCast(c_int, error_buffer.len);
-        glGetProgramInfoLog(shader_program.program, 
-                            length, 
-                            &length, 
+        glGetProgramInfoLog(shader_program.program,
+                            length,
+                            &length,
                             error_buffer.ptr);
-        std.debug.warn("Linking failed \"{}\":\n\t{}", 
+        std.debug.warn("Linking failed \"{}\":\n\t{}",
                        path,
                        error_buffer[0..@intCast(usize, length)]);
         glDeleteProgram(shader_program.program);
@@ -126,13 +127,20 @@ outer:
         const proj_arr: [*c]const f32 = @alignCast(4, &proj.v[0][0]);
         glUniformMatrix4fv(loc_proj, 1, 1, proj_arr);
     }
-    
+
     /// Send in a color
     pub fn color(shader: Shader, c: Vec3) void {
         const loc_use_color = glGetUniformLocation(shader.program, c"use_color");
         const loc_color = glGetUniformLocation(shader.program, c"color");
         glUniform1i(loc_use_color, 1);
         glUniform3f(loc_color, c.x, c.y, c.z);
+    }
+
+    pub fn setTexture(shader: Shader, texture_id: u4) void {
+        const loc_use_color = glGetUniformLocation(shader.program, c"use_color");
+        const loc_color_texture = glGetUniformLocation(shader.program, c"color_texture");
+        glUniform1i(loc_use_color, 0);
+        glUniform1i(loc_color_texture, texture_id);
     }
 
     /// Don't render any colors
