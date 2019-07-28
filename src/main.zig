@@ -12,23 +12,25 @@ pub const ECS = @import("entity.zig");
 
 //    - Entity System (pass 1)
 // TODO:
+//    - Better way of doing input
 //    - Model loading
+//      o Shading
+//      o Shadow maps :o
 //    - Split screen
+//    - Mouse Controls
 //    - Player Movement (Multi player?)
-//    - Collision
-//    - Controller support?
+//    - Collision (box vs line and box vs box) (AABB or boxes?)
+//    - Controller support
 //
 //    - Sound thread
 //    - Asset system?
-//    - Begin on actual game
-//        - Movement on plane
-//        - Camera controls, (quaternions needed?)
 //
 // Maybes:
 //    - Hot reloading of assets?
 //    - Compile time preparation of assets?
 //    - UI?
 //    - Level editor?
+//    - Online MP.
 //
 
 const Keys = enum {
