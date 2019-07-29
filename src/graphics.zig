@@ -9,6 +9,10 @@ pub const Vertex = packed struct {
     y: f32,
     z: f32,
 
+    nx: f32,
+    ny: f32,
+    nz: f32,
+
     u: f32,
     v: f32,
 
@@ -17,6 +21,10 @@ pub const Vertex = packed struct {
             .x = x,
             .y = y,
             .z = z,
+
+            .nx = 0,
+            .ny = 0,
+            .nz = 0,
 
             .u = 0,
             .v = 0,
@@ -28,6 +36,25 @@ pub const Vertex = packed struct {
             .x = x,
             .y = y,
             .z = z,
+
+            .nx = 0,
+            .ny = 0,
+            .nz = 0,
+
+            .u = u,
+            .v = v,
+        };
+    }
+
+    pub fn pnt(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32, u: f32, v: f32) Vertex {
+        return Vertex{
+            .x = x,
+            .y = y,
+            .z = z,
+
+            .nx = nx,
+            .ny = ny,
+            .nz = nz,
 
             .u = u,
             .v = v,
@@ -60,14 +87,7 @@ pub const DebugDraw = struct {
         if (current == MAX_LINES) return;
         self.points_used += 1;
         self.point_colors[current] = color;
-        self.point_mesh.append(Vertex{
-            .x = p.x,
-            .y = p.y,
-            .z = p.z,
-
-            .u = 0,
-            .v = 0,
-        });
+        self.point_mesh.append(Vertex.p(p.x, p.y, p.z));
     }
 
     pub fn line(self: *DebugDraw, a: Vec3, b: Vec3, color: Vec3) void {
@@ -75,22 +95,8 @@ pub const DebugDraw = struct {
         if (current == MAX_LINES) return;
         self.line_colors[current] = color;
         self.lines_used += 1;
-        self.line_mesh.append(Vertex{
-            .x = a.x,
-            .y = a.y,
-            .z = a.z,
-
-            .u = 0,
-            .v = 0,
-        });
-        self.line_mesh.append(Vertex{
-            .x = b.x,
-            .y = b.y,
-            .z = b.z,
-
-            .u = 0,
-            .v = 0,
-        });
+        self.line_mesh.append(Vertex.p(a.x, a.y, a.z));
+        self.line_mesh.append(Vertex.p(b.x, b.y, b.z));
     }
 
     pub fn draw(self: *DebugDraw, shader: Shader) void {
@@ -199,6 +205,35 @@ pub const Mesh = struct {
         glBindVertexArray(0);
     }
 
+    fn setupAttribArray() void {
+        // Position
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0,
+                              3,
+                              GL_FLOAT,
+                              0,
+                              @sizeOf(Vertex),
+                              @intToPtr(*allowzero c_void, 0));
+        // Normal
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1,
+                              3,
+                              GL_FLOAT,
+                              0,
+                              @sizeOf(Vertex),
+                              @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
+
+        // Texture
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2,
+                              2,
+                              GL_FLOAT,
+                              0,
+                              @sizeOf(Vertex),
+                              @intToPtr(*allowzero c_void, 6 * @sizeOf(real)));
+
+    }
+
     pub fn createEmpty(size: usize) Mesh {
         var mesh: Mesh = undefined;
         mesh.gl_indexbuffer = 0;
@@ -213,10 +248,7 @@ pub const Mesh = struct {
         mesh.total_verticies = size;
         glBufferData(GL_ARRAY_BUFFER, @intCast(c_long, size * @sizeOf(Vertex)), @intToPtr(*allowzero c_void, 0), GL_DYNAMIC_DRAW);
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
+        setupAttribArray();
 
         glBindVertexArray(0);
         return mesh;
@@ -236,10 +268,7 @@ pub const Mesh = struct {
         mesh.used_verticies = vertices.len;
         glBufferData(GL_ARRAY_BUFFER, @intCast(c_long, vertices.len * @sizeOf(Vertex)), &vertices[0], GL_STATIC_DRAW);
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
+        setupAttribArray();
 
         glBindVertexArray(0);
         return mesh;
@@ -262,10 +291,7 @@ pub const Mesh = struct {
 
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, indicies.len * @sizeOf(c_int)), &indicies[0], GL_STATIC_DRAW);
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 0));
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, 0, @sizeOf(Vertex), @intToPtr(*allowzero c_void, 3 * @sizeOf(real)));
+        setupAttribArray();
 
         glBindVertexArray(0);
         return mesh;

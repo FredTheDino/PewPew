@@ -3,6 +3,7 @@ use @import("import.zig");
 use @import("math.zig");
 const GFX = @import("graphics.zig");
 const Input = @import("input.zig").Input;
+const loadMesh = @import("obj_loader.zig").loadMesh;
 
 var window_width: i32 = 800;
 var window_height: i32 = 800;
@@ -139,6 +140,8 @@ pub fn main() anyerror!void {
         0, 5, 1,     0, 5, 4,
     });
 
+    var something = try loadMesh("res/cube.obj");
+
     var ecs = ECS.ECS.init();
 
     var texture = try GFX.Texture.load("res/test.png");
@@ -150,7 +153,7 @@ pub fn main() anyerror!void {
         .scale = 5,
     },
     ECS.Drawable{
-        .mesh = &cube,
+        .mesh = &something,
         .program = &program,
     });
 
@@ -163,6 +166,7 @@ pub fn main() anyerror!void {
     ECS.Movable.still(),
     ECS.Player.create(&input),
     );
+
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
