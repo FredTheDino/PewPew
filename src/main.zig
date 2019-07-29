@@ -140,7 +140,7 @@ pub fn main() anyerror!void {
         0, 5, 1,     0, 5, 4,
     });
 
-    var something = try loadMesh("res/cube.obj");
+    var something = try loadMesh("res/monkey.obj");
 
     var ecs = ECS.ECS.init();
 
@@ -148,7 +148,7 @@ pub fn main() anyerror!void {
 
     var floor = ecs.create(
     ECS.Transform{
-        .position = V3(0, -5, 0),
+        .position = V3(0, -10, 0),
         .rotation = Quat.identity(),
         .scale = 5,
     },

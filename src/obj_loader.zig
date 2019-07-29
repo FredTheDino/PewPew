@@ -176,15 +176,17 @@ pub fn loadMesh(path: []const u8) !Mesh {
             'f' => {
                 // Parse face
                 // Assumes trianglulated faces
+                read_head += 1;
+                read_head += 1;
                 var i: usize = 0;
                 while (i < 3) : (i += 1) {
-                    read_head += 1;
-                    read_head = readToAfterSpace(read_head, buffer);
+                    // read_head = readToAfterSpace(read_head, buffer);
                     const v_id = ((try parseUInt(&read_head, buffer)) - 1) * 3;
                     read_head += 1;
                     const vt_id = ((try parseUInt(&read_head, buffer)) - 1) * 2;
                     read_head += 1;
                     const vn_id = ((try parseUInt(&read_head, buffer)) - 1) * 3;
+                    read_head += 1;
                     const v = Vertex{
                         .x = v_buffer.at(v_id + 0),
                         .y = v_buffer.at(v_id + 1),
@@ -199,6 +201,7 @@ pub fn loadMesh(path: []const u8) !Mesh {
                     };
                     try verticies.append(v);
                 }
+                read_head -= 1;
             },
             else => {
                 continue;
