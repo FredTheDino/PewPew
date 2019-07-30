@@ -1,84 +1,185 @@
 use @import("import.zig");
 const warn = @import("std").debug.warn;
 
-pub const Input = struct {
-    should_close: bool,
+pub const Event = enum {
+    NO_INPUT_EVENT,
+    QUIT,
+    MOVE_X,
+    MOVE_Y,
 
-    pub fn InputHandler(comptime Keys: type) type {
-        return struct {
-            pub const KeyType = Keys;
-            const Self = @This();
+    LOOK_Y,
+    LOOK_X,
 
-            const State = enum(u2) {
-                PRESSED  = 0b11,
-                DOWN     = 0b01,
-                RELEASED = 0b10,
-                UP       = 0b00,
+    JUMP,
+};
 
-                pub fn update(state: State) State {
-                    return @intToEnum(State, @enumToInt(state) & 0b01);
-                }
+fn hashEvent(player: PlayerId, event: Event) usize {
+    return @intCast(usize, player) |
+        @shlExact(@intCast(usize, @enumToInt(event)), NUM_PLAYER_ID_BITS);
+}
 
-                pub fn isSameState(self: State, other: State) bool {
-                    return (@enumToInt(self) & 0b01) == (@enumToInt(other) & 0b01);
-                }
-            };
+const State = enum(u2) {
+    PRESSED  = 0b11,
+    DOWN     = 0b01,
+    RELEASED = 0b10,
+    UP       = 0b00,
 
-            // TODO: Could store one field less.
-            states: [@memberCount(Keys)]State,
-            onResize: fn (x: i32, y: i32) void,
+    pub fn update(state: State) State {
+        return @intToEnum(State, @enumToInt(state) & 0b01);
+    }
 
-            pub fn init(onResize: fn (x: i32, y: i32) void) Self {
-                return Self {
-                    .states = undefined,
-                    .onResize = onResize,
-                };
-            }
-
-            pub fn update(self: *Self) void {
-                for (self.states) |state, i| {
-                    self.states[i] = state.update();
-                }
-
-                var event: SDL_Event = undefined;
-                while (SDL_PollEvent(&event) != 0) {
-                    if (event.type == SDL_WINDOWEVENT) {
-                        if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-                            self.states[@enumToInt(Keys.QUIT)] = State.PRESSED;
-                        } else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                            self.onResize(event.window.data1, event.window.data2);
-                        } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
-                            self.onResize(event.window.data1, event.window.data2);
-                        }
-
-                    } else if (event.type == SDL_KEYDOWN) {
-                        if (event.key.repeat != 0) continue;
-                        self.process(event.key.keysym.sym, State.PRESSED);
-                    } else if (event.type == SDL_KEYUP) {
-                        if (event.key.repeat != 0) continue;
-                        self.process(event.key.keysym.sym, State.RELEASED);
-                    }
-                }
-            }
-
-            pub fn process(self: *Self, key: i32, state: State) void {
-                const event = Keys.map(key);
-                if (event == Keys.NONE)
-                    return;
-                const current = self.states[@enumToInt(event)];
-                if (!current.isSameState(state)) {
-                   self.states[@enumToInt(event)] = state;
-                }
-            }
-
-            pub fn isDown(self: Self, key: Keys) bool {
-                return self.states[@enumToInt(key)].isSameState(State.DOWN);
-            }
-
-            pub fn isPressed(self: Self, key: Keys) bool {
-                return self.states[@enumToInt(key)].isSameState(State.PRESSED);
-            }
-        };
+    pub fn isDown(self: State) bool {
+        return (@enumToInt(self) & 0b01) != 0;
     }
 };
+
+pub const Action = struct {
+    state: State,
+    value: f32,
+
+    pub fn isMe(self: Action, other: u4) bool {
+        return self.owner & other != 0;
+    }
+
+    pub fn down(self: Action) bool {
+        return (@enumToInt(self.state) & @enumToInt(State.DOWN)) != 0;
+    }
+
+    pub fn up(self: Action) bool {
+        return (self.state & State.UP) != 0;
+    }
+
+    pub fn released(self: Action) bool {
+        return self.state == State.RELEASED;
+    }
+
+    pub fn pressed(self: Action) bool {
+        return self.state == State.PRESSED;
+    }
+
+    pub fn process(self: *Action, val: f32) void {
+        self.value = val;
+        const press = val == 0.0;
+        if (self.state.isDown() != press) {
+            self.state = switch(press) {
+                true => State.PRESSED,
+                false => State.RELEASED,
+            };
+        }
+    }
+
+    pub fn update(self: *Action) void {
+        self.state = self.state.update();
+    }
+};
+
+var controllers: []*Controller = []*Controller{undefined} ** 4;
+
+pub fn numPlayers() u32 {
+    var num: u32 = 0;
+    for (controllers) |p| {
+        num += @boolToInt(p != undefined);
+    }
+    return num;
+}
+
+// TODO: Could store one field less.
+var onResize: fn(i32, i32) void = undefined;
+var states: [@memberCount(Event) * 4]Action = undefined;
+
+fn keyToEvent(k: c_int) Event {
+    // TODO:
+    return Event.NO_INPUT_EVENT;
+}
+
+fn keyToPlayer(k: c_int) PlayerId {
+    return 0;
+}
+
+fn buttonToEvent(b: c_int) Event {
+    return switch (b) {
+        SDL_CONTROLLER_BUTTON_A => Event.JUMP,
+        else => Event.NO_INPUT_EVENT,
+    };
+}
+
+fn controllerToPlayer(c: c_int) PlayerId {
+    return @intCast(PlayerId, c);
+}
+
+pub fn update() void {
+    for (states) |*state| {
+        state.update();
+    }
+
+    var event: SDL_Event = undefined;
+    while (SDL_PollEvent(&event) != 0) {
+        switch(event.type) {
+            SDL_WINDOWEVENT => {
+                switch (event.window.event) {
+                    SDL_WINDOWEVENT_CLOSE =>
+                        process(0, Event.QUIT, 1.0),
+                    SDL_WINDOWEVENT_SIZE_CHANGED, SDL_WINDOWEVENT_RESIZED =>
+                        onResize(event.window.data1, event.window.data2),
+                    else => {},
+                }
+            },
+            SDL_KEYDOWN => {
+                if (event.key.repeat != 0) continue;
+                if (event.key.repeat != 0) continue;
+                const key = event.key.keysym.sym;
+                process(keyToPlayer(key), keyToEvent(key), 1);
+            },
+            SDL_KEYUP => {
+                if (event.key.repeat != 0) continue;
+                const key = event.key.keysym.sym;
+                process(keyToPlayer(key), keyToEvent(key), 0);
+            },
+            SDL_CONTROLLERBUTTONDOWN => {
+                const button = event.cbutton.button;
+                const which = event.cbutton.which;
+                process(controllerToPlayer(which), buttonToEvent(button), 1);
+            },
+            SDL_CONTROLLERBUTTONUP => {
+                const button = event.cbutton.button;
+                const which = event.cbutton.which;
+                process(controllerToPlayer(which), buttonToEvent(button), 0);
+            },
+            SDL_JOYDEVICEADDED => {
+                std.debug.warn("TODO: CONNECTED!\n");
+            },
+            SDL_JOYDEVICEREMOVED => {
+                std.debug.warn("TODO: DISCONNECTED!\n");
+            },
+            else => {
+            },
+        }
+    }
+}
+
+fn process(player: PlayerId, event: Event, v: f32) void {
+    if (event == Event.NO_INPUT_EVENT) { return; }
+    const hash = hashEvent(player, event);
+    states[hash].process(v);
+}
+
+pub fn down(player: u2, event: Event) bool {
+    return states[hashEvent(player, event)].down();
+}
+
+pub fn up(player: u2, event: Event) bool {
+    return states[hashEvent(player, event)].up();
+}
+
+pub fn released(player: u2, event: Event) bool {
+    return states[hashEvent(player, event)].released();
+}
+
+pub fn pressed(player: u2, event: Event) bool {
+    return states[hashEvent(player, event)].pressed();
+}
+
+pub fn value(player: u2, event: Event) f32 {
+    return states[hashEvent(player, event)].value;
+}
 

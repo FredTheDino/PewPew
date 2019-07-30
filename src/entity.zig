@@ -2,7 +2,7 @@
 /// at play at a time. Some convenience methods will not work
 /// if there are more than that.
 use @import("import.zig");
-const InputHandler = @import("main.zig").InputHandler;
+const Input = @import("input.zig");
 const Keys = InputHandler.KeyType;
 
 // TODO(ed): Maybe add a way to add requirements to components,
@@ -60,7 +60,6 @@ pub const Movable = struct {
 pub const Player = struct {
     // Camera
     const FLOOR_HEIGHT: f32 = 0;
-    var input: *InputHandler = undefined;
     yaw: f32,
     pitch: f32,
 
@@ -69,8 +68,9 @@ pub const Player = struct {
     jump_speed: f32,
     gravity: f32,
 
-    pub fn create(input_ptr: *InputHandler) Player {
-        input = input_ptr;
+    id: Input.PlayerId,
+
+    pub fn create(id: PlayerId) Player {
         return Player{
             .yaw = 0,
             .pitch = 0,
@@ -78,8 +78,10 @@ pub const Player = struct {
             .speed = 10.0,
             .jump_speed = 8.0,
             .gravity = -10.0,
+            .id = id,
         };
     }
+
 
     pub fn update(self: Player, entity: *Entity, delta: f32) void {
         // TODO: Agressive, it crashes if it doesn't exist, is this smart?
@@ -89,22 +91,11 @@ pub const Player = struct {
         const player: *Player = entity.getPlayer();
         // TODO: Acceleration
 
-        var movement: Vec4 = V4(0, 0, 0, 0);
-        if (input.isDown(Keys.RIGHT)) {
-            movement.x += self.speed * delta;
-        }
-
-        if (input.isDown(Keys.LEFT)) {
-            movement.x -= self.speed * delta;
-        }
-
-        if (input.isDown(Keys.UP)) {
-            movement.z -= self.speed * delta;
-        }
-
-        if (input.isDown(Keys.DOWN)) {
-            movement.z += self.speed * delta;
-        }
+        var movement: Vec4 = V4(
+                Input.value(player.id, Input.Event.MOVE_X) * delta,
+                0,
+                Input.value(player.id, Input.Event.MOVE_Y) * delta,
+                0);
 
         const rotation = Mat4.rotation(0, self.yaw, 0);
         movable.linear = movable.linear.add(rotation.mulVec(movement).toV3());
@@ -114,26 +105,13 @@ pub const Player = struct {
         movable.linear = movable.linear.scale(damping);
         movable.linear.y = y_vel;
 
-        if (input.isDown(Keys.P_PITCH)) {
-            player.pitch += delta;
-        }
-
-        if (input.isDown(Keys.N_PITCH)) {
-            player.pitch -= delta;
-        }
-
-        if (input.isDown(Keys.P_YAW)) {
-            player.yaw += delta;
-        }
-
-        if (input.isDown(Keys.N_YAW)) {
-            player.yaw -= delta;
-        }
+        player.yaw -= Input.value(player.id, Input.Event.LOOK_X) * delta;
+        player.pitch += Input.value(player.id, Input.Event.LOOK_Y) * delta;
 
         if (transform.position.y <= FLOOR_HEIGHT) {
             transform.position.y = 0;
             movable.linear.y = 0;
-            if (input.isPressed(Keys.JUMP)) {
+            if (false) {
                 movable.linear.y = self.jump_speed;
             }
         } else {
