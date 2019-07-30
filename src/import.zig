@@ -10,10 +10,6 @@ pub use @cImport({
 });
 pub const Controller: type = SDL_GameController;
 // Better Controller mappings
-pub fn ControllerAxis(controller: *Controller, axis: SDL_GameControllerAxis) f32 {
-    const stick = SDL_GameControllerGetAxis(player.controller, axis);
-    return @intToFloat(f32, stick) / @intToFloat(f32, 0xEFFF);
-}
 pub const SDLA_LEFTX = @intToEnum(SDL_GameControllerAxis, SDL_CONTROLLER_AXIS_LEFTX);
 pub const SDLA_LEFTY = @intToEnum(SDL_GameControllerAxis, SDL_CONTROLLER_AXIS_LEFTY);
 pub const SDLA_RIGHTX = @intToEnum(SDL_GameControllerAxis, SDL_CONTROLLER_AXIS_RIGHTX);

@@ -85,11 +85,15 @@ pub fn numPlayers() u32 {
 
 // TODO: Could store one field less.
 var onResize: fn(i32, i32) void = undefined;
+// TODO: Zero this out
 var states: [@memberCount(Event) * 4]Action = undefined;
 
 fn keyToEvent(k: c_int) Event {
     // TODO:
-    return Event.NO_INPUT_EVENT;
+    return switch(k) {
+        SDLK_ESCAPE => Event.QUIT,
+        else => Event.NO_INPUT_EVENT,
+    };
 }
 
 fn keyToPlayer(k: c_int) PlayerId {
@@ -99,6 +103,16 @@ fn keyToPlayer(k: c_int) PlayerId {
 fn buttonToEvent(b: c_int) Event {
     return switch (b) {
         SDL_CONTROLLER_BUTTON_A => Event.JUMP,
+        else => Event.NO_INPUT_EVENT,
+    };
+}
+
+fn axisToEvent(a: SDL_GameControllerAxis) Event {
+    return switch(a) {
+        SDLA_LEFTX => Event.MOVE_X,
+        SDLA_LEFTY => Event.MOVE_Y,
+        SDLA_RIGHTX => Event.LOOK_X,
+        SDLA_RIGHTY => Event.LOOK_Y,
         else => Event.NO_INPUT_EVENT,
     };
 }
@@ -117,8 +131,10 @@ pub fn update() void {
         switch(event.type) {
             SDL_WINDOWEVENT => {
                 switch (event.window.event) {
-                    SDL_WINDOWEVENT_CLOSE =>
-                        process(0, Event.QUIT, 1.0),
+                    SDL_WINDOWEVENT_CLOSE => {
+                        process(0, Event.QUIT, 1);
+                        process(0, Event.QUIT, 0);
+                    },
                     SDL_WINDOWEVENT_SIZE_CHANGED, SDL_WINDOWEVENT_RESIZED =>
                         onResize(event.window.data1, event.window.data2),
                     else => {},
@@ -145,8 +161,21 @@ pub fn update() void {
                 const which = event.cbutton.which;
                 process(controllerToPlayer(which), buttonToEvent(button), 0);
             },
+            SDL_CONTROLLERAXISMOTION => {
+                const raw_motion = event.cbutton.button;
+                const motion = @intToFloat(f32, raw_motion) / @intToFloat(f32, 0xEFFF);
+                const axis = @intToEnum(SDL_GameControllerAxis, event.caxis.axis);
+                const which = event.cbutton.which;
+                warn("{} - {} - {}\n", motion, axis, which);
+                process(controllerToPlayer(which), axisToEvent(axis), motion);
+            },
             SDL_JOYDEVICEADDED => {
                 std.debug.warn("TODO: CONNECTED!\n");
+                var i: c_int = 0;
+                while (i < SDL_NumJoysticks()): (i += 1) {
+                    if (@enumToInt(SDL_IsGameController(i)) == 0) continue;
+                    _ = SDL_GameControllerOpen(i);
+                }
             },
             SDL_JOYDEVICEREMOVED => {
                 std.debug.warn("TODO: DISCONNECTED!\n");
