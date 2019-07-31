@@ -6,6 +6,11 @@ pub const accuracy = 0.0001;
 
 pub const math = @import("std").math;
 
+pub fn sign(v: var) @typeOf(v) {
+    if (v < 0)
+        return -1;
+    return 1;
+}
 
 pub fn V2(x: real, y: real) Vec2 {
     return Vec2 {
@@ -535,6 +540,12 @@ pub const Vec3 = packed struct {
         };
     }
 
+    pub fn hadamard(a: Vec3, b: Vec3) Vec3 {
+        return V3(a.x * b.x,
+                  a.y * b.y,
+                  a.z * b.z);
+    }
+
     pub fn lengthSq(self: Vec3) real {
         return @inlineCall(dot, self, self);
     }
@@ -557,6 +568,12 @@ pub const Vec3 = packed struct {
 
     pub fn equals(self: Vec3, other: Vec3) bool {
         return @inlineCall(equalsAcc, self, other, accuracy);
+    }
+
+    pub fn abs(self: Vec3) Vec3 {
+        return V3(math.fabs(self.x),
+                  math.fabs(self.y),
+                  math.fabs(self.z));
     }
 
     pub fn toV4(self: Vec3, w: real) Vec4 {

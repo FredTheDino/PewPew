@@ -1,6 +1,7 @@
 use @import("import.zig");
 
 use @import("math.zig");
+const Phy = @import("collision.zig");
 const GFX = @import("graphics.zig");
 const Input = @import("input.zig");
 const loadMesh = @import("obj_loader.zig").loadMesh;
@@ -105,7 +106,13 @@ pub fn main() anyerror!void {
     ECS.Movable.still(),
     ECS.Player.create(0),
     );
+    var world = Phy.World.init();
+    var body_a = world.create(V3(1, 1, 0.5));
+    body_a.deNoNull().position = V3(0, -2, -5);
 
+    var body_b = world.create(V3(1, 0.5, 1.0));
+    body_b.deNoNull().position = V3(0, 1, -5);
+    body_b.deNoNull().velocity = V3(0.2, -1, 0.2);
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -128,6 +135,11 @@ pub fn main() anyerror!void {
                            .getPlayer()
                            .getViewMatrix(player.deNoNull());
         program.sendCamera(projection, view);
+
+        body_a.deNoNull().draw();
+        body_b.deNoNull().draw();
+
+        world.update(delta);
 
         gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));

@@ -307,6 +307,7 @@ pub const EntityID = struct {
         return e;
     }
 
+    // Better name?
     pub fn deNoNull(self: EntityID) *Entity {
         return self.de() orelse unreachable;
     }
@@ -318,7 +319,6 @@ pub const ECS = struct {
     // List of entities
     // Add / Remove / Get
     const EntityList = List(Entity);
-    const IDList = List(EntityID);
 
     entities: EntityList,
     next_free: i32,
