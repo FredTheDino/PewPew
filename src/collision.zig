@@ -41,7 +41,7 @@ pub const Body = struct {
     acceleation: Vec3,
 
     moveable: bool,
-    is_colliding: bool,
+    overlapping: bool,
 
     fn create(dimension: Vec3) Body {
         return Body{
@@ -52,7 +52,7 @@ pub const Body = struct {
             .velocity =  V3(0, 0, 0),
             .acceleation = V3(0, 0, 0),
 
-            .is_colliding = false,
+            .overlapping = false,
             .moveable = true,
         };
     }
@@ -92,11 +92,15 @@ pub const Body = struct {
         self.velocity = self.velocity.add(self.acceleation.scale(delta));
         self.position = self.position.add(self.velocity.scale(delta));
         self.acceleation = V3(0, 0, 0);
+        self.overlapping = false;
     }
 
     pub fn draw(self: Body) void {
         const line = DebugDraw.gfx_util.line;
-        const color = V3(0.5, 0.1, 0.8);
+        const color = switch(self.overlapping) {
+            true => V3(0.5, 0.1, 0.8),
+            false => V3(0.8, 0.5, 0.1),
+        };
         const p = self.position;
         const d = self.dimension;
         line(p.add(d.hadamard(V3(-0.5, -0.5, -0.5))),
@@ -145,7 +149,7 @@ pub const Body = struct {
 
 // Where to store these?
 pub const Collision = struct {
-    const BOUNCE = 1;
+    const BOUNCE = 0;
     const SKIN = 0.01;
     normal: Vec3,
     depth: f32,
@@ -159,22 +163,22 @@ pub const Collision = struct {
         if (total_velocity.dot(a.position.sub(b.position)) < 0) {
             return;
         }
+        a.overlapping = true;
+        b.overlapping = true;
         const move_a = @intToFloat(f32, @boolToInt(a.moveable));
         const move_b = @intToFloat(f32, @boolToInt(b.moveable));
         const split = move_a + move_b;
         if (split == 0) {
             return;
         }
-        if (self.depth > SKIN) {
-            const delta_vel = (1 + BOUNCE) * total_velocity.dot(self.normal) / split;
-            log("{}\n", delta_vel);
-            a.velocity = a.velocity.add(self.normal.scale(delta_vel * move_a));
-            b.velocity = b.velocity.sub(self.normal.scale(delta_vel * move_b));
-        }
-
         const total_delta = self.depth / split;
         a.position = a.position.add(self.normal.scale(total_delta * move_a));
         b.position = b.position.sub(self.normal.scale(total_delta * move_b));
+
+        if (self.depth < SKIN) { return; }
+        const delta_vel = (1 + BOUNCE) * total_velocity.dot(self.normal) / split;
+        a.velocity = a.velocity.add(self.normal.scale(delta_vel * move_a));
+        b.velocity = b.velocity.sub(self.normal.scale(delta_vel * move_b));
     }
 };
 
@@ -231,6 +235,16 @@ pub const World = struct {
             self.next_free = -(1 + b.id.pos);
             b.id.pos = curr;
             b.id.gen += 1;
+        }
+    }
+
+    pub fn draw(self: *World) void {
+        var bodies = &global_world.bodies.toSlice();
+        var i: usize = 0;
+        while (i < bodies.len) : (i += 1) {
+            var body: *Body = &bodies.ptr[i];
+            if (!body.id.isAlive()) { continue; }
+            body.draw();
         }
     }
 

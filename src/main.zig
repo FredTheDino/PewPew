@@ -109,10 +109,13 @@ pub fn main() anyerror!void {
     var world = Phy.World.init();
     var body_a = world.create(V3(1, 1, 0.5));
     body_a.deNoNull().position = V3(0, -2, -5);
+    body_a.deNoNull().moveable = true;
 
     var body_b = world.create(V3(1, 0.5, 1.0));
     body_b.deNoNull().position = V3(0, 1, -5);
     body_b.deNoNull().velocity = V3(0.2, -1, 0.2);
+    body_b.deNoNull().moveable = false;
+
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -136,10 +139,8 @@ pub fn main() anyerror!void {
                            .getViewMatrix(player.deNoNull());
         program.sendCamera(projection, view);
 
-        body_a.deNoNull().draw();
-        body_b.deNoNull().draw();
-
         world.update(delta);
+        world.draw();
 
         gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
         gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
