@@ -162,7 +162,10 @@ pub fn update() void {
                 process(controllerToPlayer(which), buttonToEvent(button), 0);
             },
             SDL_CONTROLLERAXISMOTION => {
-                if (event.caxis.which == 1) { continue; }
+                // TODO: Other controllers need work, like the PS4
+                // Game pad is actually 2 game pads, one for motion
+                // and one for the normal stuff.
+                if (event.caxis.which != 0) { continue; }
                 const raw_motion = event.caxis.value;
                 var motion = @intToFloat(f32, raw_motion) /
                              @intToFloat(f32, 0x7FFF);
