@@ -44,7 +44,7 @@ fn onResize(x: i32, y: i32) void {
 }
 
 pub fn main() anyerror!void {
-    assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_AUDIO) == 0);
+    assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) == 0);
 
     const title = c"Hello World";
     var window = SDL_CreateWindow(title,

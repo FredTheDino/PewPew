@@ -59,7 +59,7 @@ pub const Action = struct {
 
     pub fn process(self: *Action, val: f32) void {
         self.value = val;
-        const press = val == 0.0;
+        const press = val != 0.0;
         if (self.state.isDown() != press) {
             self.state = switch(press) {
                 true => State.PRESSED,
@@ -162,23 +162,27 @@ pub fn update() void {
                 process(controllerToPlayer(which), buttonToEvent(button), 0);
             },
             SDL_CONTROLLERAXISMOTION => {
-                const raw_motion = event.cbutton.button;
-                const motion = @intToFloat(f32, raw_motion) / @intToFloat(f32, 0xEFFF);
+                if (event.caxis.which == 1) { continue; }
+                const raw_motion = event.caxis.value;
+                var motion = @intToFloat(f32, raw_motion) /
+                             @intToFloat(f32, 0x7FFF);
+                if (math.fabs(motion) < 0.05) {
+                    motion = 0.0;
+                }
                 const axis = @intToEnum(SDL_GameControllerAxis, event.caxis.axis);
-                const which = event.cbutton.which;
-                warn("{} - {} - {}\n", motion, axis, which);
+                const which = event.caxis.which;
                 process(controllerToPlayer(which), axisToEvent(axis), motion);
             },
             SDL_JOYDEVICEADDED => {
-                std.debug.warn("TODO: CONNECTED!\n");
                 var i: c_int = 0;
                 while (i < SDL_NumJoysticks()): (i += 1) {
-                    if (@enumToInt(SDL_IsGameController(i)) == 0) continue;
-                    _ = SDL_GameControllerOpen(i);
+                    if (@enumToInt(SDL_IsGameController(i)) == 1) {
+                        _ = SDL_GameControllerOpen(i);
+                        std.debug.warn("Connected Controller: {}\n", i);
+                    }
                 }
             },
             SDL_JOYDEVICEREMOVED => {
-                std.debug.warn("TODO: DISCONNECTED!\n");
             },
             else => {
             },

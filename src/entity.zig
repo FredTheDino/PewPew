@@ -111,7 +111,7 @@ pub const Player = struct {
         if (transform.position.y <= FLOOR_HEIGHT) {
             transform.position.y = 0;
             movable.linear.y = 0;
-            if (false) {
+            if (Input.pressed(player.id, Input.Event.JUMP)) {
                 movable.linear.y = self.jump_speed;
             }
         } else {
