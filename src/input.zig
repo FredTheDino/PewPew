@@ -87,40 +87,6 @@ pub fn numPlayers() u32 {
 var onResize: fn(i32, i32) void = undefined;
 // TODO: Zero this out
 var states: [@memberCount(Event) * 4]Action = undefined;
-
-fn keyToEvent(k: c_int) Event {
-    // TODO:
-    return switch(k) {
-        SDLK_ESCAPE => Event.QUIT,
-        else => Event.NO_INPUT_EVENT,
-    };
-}
-
-fn keyToPlayer(k: c_int) PlayerId {
-    return 0;
-}
-
-fn buttonToEvent(b: c_int) Event {
-    return switch (b) {
-        SDL_CONTROLLER_BUTTON_A => Event.JUMP,
-        else => Event.NO_INPUT_EVENT,
-    };
-}
-
-fn axisToEvent(a: SDL_GameControllerAxis) Event {
-    return switch(a) {
-        SDLA_LEFTX => Event.MOVE_X,
-        SDLA_LEFTY => Event.MOVE_Y,
-        SDLA_RIGHTX => Event.LOOK_X,
-        SDLA_RIGHTY => Event.LOOK_Y,
-        else => Event.NO_INPUT_EVENT,
-    };
-}
-
-fn controllerToPlayer(c: c_int) PlayerId {
-    return @intCast(PlayerId, c);
-}
-
 pub fn update() void {
     for (states) |*state| {
         state.update();
@@ -132,34 +98,26 @@ pub fn update() void {
             SDL_WINDOWEVENT => {
                 switch (event.window.event) {
                     SDL_WINDOWEVENT_CLOSE => {
-                        process(0, Event.QUIT, 1);
-                        process(0, Event.QUIT, 0);
+                        process(KeyEvent.create(0, Event.QUIT, 1));
                     },
                     SDL_WINDOWEVENT_SIZE_CHANGED, SDL_WINDOWEVENT_RESIZED =>
                         onResize(event.window.data1, event.window.data2),
                     else => {},
                 }
             },
-            SDL_KEYDOWN => {
-                if (event.key.repeat != 0) continue;
-                if (event.key.repeat != 0) continue;
-                const key = event.key.keysym.sym;
-                process(keyToPlayer(key), keyToEvent(key), 1);
-            },
-            SDL_KEYUP => {
+            SDL_KEYDOWN, SDL_KEYUP => {
                 if (event.key.repeat != 0) continue;
                 const key = event.key.keysym.sym;
-                process(keyToPlayer(key), keyToEvent(key), 0);
+                const is_down = event.key.state == SDL_PRESSED;
+                const key_evet = KeyEvent.key(key, is_down);
+                process(key_evet);
             },
-            SDL_CONTROLLERBUTTONDOWN => {
+            SDL_CONTROLLERBUTTONUP, SDL_CONTROLLERBUTTONDOWN => {
                 const button = event.cbutton.button;
                 const which = event.cbutton.which;
-                process(controllerToPlayer(which), buttonToEvent(button), 1);
-            },
-            SDL_CONTROLLERBUTTONUP => {
-                const button = event.cbutton.button;
-                const which = event.cbutton.which;
-                process(controllerToPlayer(which), buttonToEvent(button), 0);
+                const is_down = event.cbutton.state == SDL_PRESSED;
+                const key_evet = KeyEvent.button(which, button, is_down);
+                process(key_evet);
             },
             SDL_CONTROLLERAXISMOTION => {
                 // TODO: Other controllers need work, like the PS4
@@ -174,7 +132,8 @@ pub fn update() void {
                 }
                 const axis = @intToEnum(SDL_GameControllerAxis, event.caxis.axis);
                 const which = event.caxis.which;
-                process(controllerToPlayer(which), axisToEvent(axis), motion);
+                const key_evet = KeyEvent.axis(which, axis, motion);
+                process(key_evet);
             },
             SDL_JOYDEVICEADDED => {
                 var i: c_int = 0;
@@ -193,10 +152,81 @@ pub fn update() void {
     }
 }
 
-fn process(player: PlayerId, event: Event, v: f32) void {
-    if (event == Event.NO_INPUT_EVENT) { return; }
-    const hash = hashEvent(player, event);
-    states[hash].process(v);
+const KeyEvent = struct {
+    player: PlayerId,
+    event: Event,
+    value: f32,
+
+    fn create(player: PlayerId, event: Event, v: f32) KeyEvent {
+        return KeyEvent{
+            .player = player,
+            .event = event,
+            .value = v,
+        };
+    }
+
+    fn controllerToPlayer(c: c_int) PlayerId {
+        return @intCast(PlayerId, c);
+    }
+
+    pub fn button(which: c_int, b: c_int, is_down: bool) KeyEvent {
+        const player = controllerToPlayer(which);
+        // TODO: Support directional buttons???
+        const event = switch (b) {
+            SDL_CONTROLLER_BUTTON_A => Event.JUMP,
+            else => Event.NO_INPUT_EVENT,
+        };
+        return create(player, event, 1.0);
+    }
+
+    pub fn axis(which: c_int, a: SDL_GameControllerAxis, motion: f32) KeyEvent {
+        const player = controllerToPlayer(which);
+        const event = switch(a) {
+            SDLA_LEFTX => Event.MOVE_X,
+            SDLA_LEFTY => Event.MOVE_Y,
+            SDLA_RIGHTX => Event.LOOK_X,
+            SDLA_RIGHTY => Event.LOOK_Y,
+            else => Event.NO_INPUT_EVENT,
+        };
+        return create(player, event, motion);
+    }
+
+    pub fn key(k: c_int, is_down: bool) KeyEvent {
+        var event = switch(k) {
+            SDLK_d => create(0, Event.MOVE_X,  1.0),
+            SDLK_a => create(0, Event.MOVE_X, -1.0),
+            SDLK_w => create(0, Event.MOVE_Y, -1.0),
+            SDLK_s => create(0, Event.MOVE_Y,  1.0),
+            SDLK_e => create(0, Event.LOOK_X,  1.0),
+            SDLK_q => create(0, Event.LOOK_X, -1.0),
+            SDLK_ESCAPE => create(0, Event.QUIT, 1.0),
+            else => create(0, Event.NO_INPUT_EVENT, 0.0),
+        };
+        if (!is_down)
+            event.value = 0.0;
+        return event;
+    }
+
+    fn keyToEvent(k: c_int) Event {
+    }
+
+    fn keyToPlayer(k: c_int) PlayerId {
+        return 0;
+    }
+
+    fn buttonToEvent(b: c_int) Event {
+    }
+
+    fn axisToEvent(a: SDL_GameControllerAxis) Event {
+    }
+
+
+};
+
+fn process(key_event: KeyEvent) void {
+    if (key_event.event == Event.NO_INPUT_EVENT) return;
+    const hash = hashEvent(key_event.player, key_event.event);
+    states[hash].process(key_event.value);
 }
 
 pub fn down(player: u2, event: Event) bool {

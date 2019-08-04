@@ -107,15 +107,27 @@ pub fn main() anyerror!void {
     ECS.Player.create(0),
     );
     var world = Phy.World.init();
-    var body_a = world.create(V3(1, 1, 0.5));
-    body_a.deNoNull().position = V3(0, -2, -5);
-    body_a.deNoNull().moveable = true;
+    var body_a = world.create(V3(1, 1, 0.5), true);
+    body_a.dep().position = V3(0, -2, -5);
 
-    var body_b = world.create(V3(1, 0.5, 1.0));
-    body_b.deNoNull().position = V3(0, 1, -5);
-    body_b.deNoNull().velocity = V3(0.2, -1, 0.2);
-    body_b.deNoNull().moveable = false;
+    var body_b = world.create(V3(1, 0.5, 1.0), true);
+    body_b.dep().position = V3(0, 1, -5);
+    body_b.dep().velocity = V3(0.2, -1, 0.2);
 
+    const entity_a = ecs.create(
+    ECS.Transform{
+        .position = V3(-4, -1, -5),
+        .rotation = Quat.identity(),
+        .scale = 0.5,
+    }, ECS.Movable{
+        .linear = V3(2, -0.3, 0),
+        .rotational = V3(0, 0, 0),
+        .damping = 1,
+    }, ECS.Physics.create(V3(1, 1, 1), true)
+    , ECS.Drawable{
+        .mesh = &cube,
+        .program = &program,
+    });
 
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
@@ -134,9 +146,9 @@ pub fn main() anyerror!void {
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
-        const view = player.deNoNull()
+        const view = player.dep()
                            .getPlayer()
-                           .getViewMatrix(player.deNoNull());
+                           .getViewMatrix(player.dep());
         program.sendCamera(projection, view);
 
         world.update(delta);

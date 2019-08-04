@@ -8,6 +8,9 @@ const Keys = InputHandler.KeyType;
 // TODO(ed): Maybe add a way to add requirements to components,
 // since they require each other.
 
+// TODO: Is this a compiler bug???? This is wierd...
+
+const Phy = @import("collision.zig");
 const GFX = @import("graphics.zig");
 const List = @import("std").ArrayList;
 
@@ -33,6 +36,7 @@ pub const Transform = struct {
 };
 
 pub const Movable = struct {
+
     linear: Vec3,
     rotational: Vec3,
     damping: f32,
@@ -46,6 +50,8 @@ pub const Movable = struct {
     }
 
     pub fn update(self: Movable, entity: *Entity, delta: f32) void {
+        // Don't move it twice.
+        if (entity.has(CT.physics)) return;
         if (!entity.has(CT.transform)) return;
         var t: *Transform = entity.getTransform();
         var m: *Movable = entity.getMoveable();
@@ -54,6 +60,24 @@ pub const Movable = struct {
         const damping = math.pow(f32, 1 - m.damping, delta);
         m.linear = m.linear.scale(damping);
         m.rotational = m.rotational.scale(damping);
+    }
+};
+
+pub const Physics = struct {
+    body: Phy.BodyID,
+
+    pub fn isOverlapping(self: Physics) bool {
+        return self.body.dep().overlapping;
+    }
+
+    pub fn create(dimension: Vec3, moveable: bool) Physics {
+        return Physics{
+            .body = Phy.global_world.create(dimension, moveable),
+        };
+    }
+
+    pub fn connect(self: *Physics, owner: EntityID) void {
+        self.body.dep().entity = owner;
     }
 };
 
@@ -157,24 +181,24 @@ const C = Component;
 
 pub const ComponentType = enum {
     // Update order:
+    physics,
+    player,
     transform,
     gravity,
     movable,
-    player,
 
     drawable,
 };
 
 pub const Component = union(ComponentType) {
     // TODO: Can I make this into a macro somehow?
+    physics: Physics,
+    player: Player,
     transform: Transform,
     gravity: Gravity,
     movable: Movable,
-    player: Player,
 
     drawable: Drawable,
-
-    fn noop() void {}
 
     fn update(self: C, entity: *Entity, delta: f32) void {
         switch (self) {
@@ -182,8 +206,7 @@ pub const Component = union(ComponentType) {
             C.gravity => |c| c.update(entity, delta),
             C.movable => |c| c.update(entity, delta),
             C.player => |c| c.update(entity, delta),
-            C.transform => noop(),
-            else => noop(),
+            else => {},
         }
     }
 
@@ -204,6 +227,9 @@ pub const Component = union(ComponentType) {
             Player => C{
                 .player = component,
             },
+            Physics => C{
+                .physics = component,
+            },
             else => {
                 std.debug.warn("FOREGOT TO ADD TO WRAP\n");
                 unreachable;
@@ -212,6 +238,8 @@ pub const Component = union(ComponentType) {
     }
 };
 
+// TODO: This style isn't that good... It needs a lot of abstraction
+// or to be something else...
 pub const Entity = struct {
     id: EntityID,
     // TODO: Should this be passed into the update function?
@@ -238,6 +266,9 @@ pub const Entity = struct {
                 wrapped = component;
             } else {
                 wrapped = C.wrap(component);
+            }
+            if (wrapped == CT.physics) {
+                wrapped.physics.connect(self.id);
             }
             const pos = @enumToInt(wrapped);
             self.active_components[pos] = true;
@@ -286,6 +317,10 @@ pub const Entity = struct {
         return &(self.get(CT.player) orelse unreachable).player;
     }
 
+    pub fn getPhysics(self: *Entity) *Physics {
+        return &(self.get(CT.physics) orelse unreachable).physics;
+    }
+
     pub fn update(self: *Entity, component: CT, delta: f32) void {
         if (!self.has(component)) return;
         const i = @enumToInt(component);
@@ -308,7 +343,7 @@ pub const EntityID = struct {
     }
 
     // Better name?
-    pub fn deNoNull(self: EntityID) *Entity {
+    pub fn dep(self: EntityID) *Entity {
         return self.de() orelse unreachable;
     }
 };
@@ -354,10 +389,10 @@ pub const ECS = struct {
     }
 
     pub fn create(self: *ECS, args: ...) EntityID {
-        var e = Entity.init(self);
-        e.add(args);
         var id = self.genId() orelse unreachable;
+        var e = Entity.init(self);
         e.id = id;
+        e.add(args);
         self.entities.set(@intCast(usize, id.pos), e);
         return id;
     }
@@ -375,11 +410,12 @@ pub const ECS = struct {
     }
 
     pub fn update(self: *ECS, delta: f32) void {
+        const entities = self.entities.toSlice();
         var c: usize = 0;
         while (c < @memberCount(CT)) : (c += 1) {
             var i: usize = 0;
             while (i < self.entities.count()): (i += 1) {
-                var e: *Entity = &self.entities.toSlice()[i];
+                var e: *Entity = &entities[i];
                 if (!e.id.isAlive() or e.id.pos != @intCast(i32, i)) continue;
                 e.update(@intToEnum(CT, @intCast(@TagType(CT), c)), delta);
             }

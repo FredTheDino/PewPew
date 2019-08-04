@@ -7,8 +7,10 @@
 
 use @import("import.zig");
 
+const ECS = @import("entity.zig");
+
 const DebugDraw = @import("graphics.zig").DebugDraw;
-var global_world: World = undefined;
+pub var global_world: World = undefined;
 const List = @import("std").ArrayList;
 // TODO: This is a naïve implementation,
 // it's really not as fast as it can be.
@@ -26,7 +28,7 @@ pub const BodyID = struct {
         return e;
     }
 
-    pub fn deNoNull(self: BodyID) *Body {
+    pub fn dep(self: BodyID) *Body {
         return self.de() orelse unreachable;
     }
 };
@@ -36,6 +38,9 @@ pub const Body = struct {
     // Stored as w/2, h/2, d/2
     dimension: Vec3,
 
+    entity: ?ECS.EntityID,
+    // TODO: Collision volumes
+    // TODO: Who's colliding with what?
     position: Vec3,
     velocity: Vec3,
     acceleation: Vec3,
@@ -43,7 +48,7 @@ pub const Body = struct {
     moveable: bool,
     overlapping: bool,
 
-    fn create(dimension: Vec3) Body {
+    fn create(dimension: Vec3, moveable: bool) Body {
         return Body{
             .id = BodyID{ .pos = 0, .gen = 0 },
             .dimension = dimension,
@@ -51,9 +56,10 @@ pub const Body = struct {
             .position = V3(0, 0, 0),
             .velocity =  V3(0, 0, 0),
             .acceleation = V3(0, 0, 0),
+            .entity = null,
 
+            .moveable = moveable,
             .overlapping = false,
-            .moveable = true,
         };
     }
 
@@ -89,18 +95,39 @@ pub const Body = struct {
     }
 
     fn update(self: *Body, delta: f32) void {
+        if (self.entity) |id| {
+            const entity: *ECS.Entity = id.dep();
+            if (entity.has(ECS.ComponentType.movable)) {
+                self.velocity = entity.getMoveable().linear;
+            }
+            if (entity.has(ECS.ComponentType.transform)) {
+                self.position = entity.getTransform().position;
+            }
+        }
         self.velocity = self.velocity.add(self.acceleation.scale(delta));
         self.position = self.position.add(self.velocity.scale(delta));
         self.acceleation = V3(0, 0, 0);
         self.overlapping = false;
     }
 
+    fn tryCopyBack(self: Body) void {
+        if (self.entity) |id| {
+            const entity: *ECS.Entity = id.dep();
+            if (entity.has(ECS.ComponentType.movable))
+                entity.getMoveable().linear = self.velocity;
+            if (entity.has(ECS.ComponentType.transform))
+                entity.getTransform().position = self.position;
+        }
+    }
+
     pub fn draw(self: Body) void {
+        const point = DebugDraw.gfx_util.point;
         const line = DebugDraw.gfx_util.line;
         const color = switch(self.overlapping) {
             true => V3(0.5, 0.1, 0.8),
             false => V3(0.8, 0.5, 0.1),
         };
+
         const p = self.position;
         const d = self.dimension;
         line(p.add(d.hadamard(V3(-0.5, -0.5, -0.5))),
@@ -157,8 +184,8 @@ pub const Collision = struct {
     b: BodyID,
 
     fn solve(self: *Collision) void {
-        var a = self.a.deNoNull();
-        var b = self.b.deNoNull();
+        var a = self.a.dep();
+        var b = self.b.dep();
         const total_velocity = a.velocity.add(b.velocity);
         if (total_velocity.dot(a.position.sub(b.position)) < 0) {
             return;
@@ -171,7 +198,7 @@ pub const Collision = struct {
         if (split == 0) {
             return;
         }
-        const total_delta = self.depth / split;
+        const total_delta = math.min((self.depth + SKIN) / split, 0.0);
         a.position = a.position.add(self.normal.scale(total_delta * move_a));
         b.position = b.position.sub(self.normal.scale(total_delta * move_b));
 
@@ -218,8 +245,8 @@ pub const World = struct {
         return id;
     }
 
-    pub fn create(self: *World, dimension: Vec3) BodyID {
-        var body = Body.create(dimension);
+    pub fn create(self: *World, dimension: Vec3, moveable: bool) BodyID {
+        var body = Body.create(dimension, moveable);
         var id = self.genId() orelse unreachable;
         body.id = id;
         self.bodies.set(@intCast(usize, id.pos), body);
@@ -251,7 +278,6 @@ pub const World = struct {
     pub fn update(self: *World, delta: f32) void {
         // TODO: This can be made a lot smarter
         var bodies = &global_world.bodies.toSlice();
-
         {
             var i: usize = 0;
             while (i < bodies.len) : (i += 1) {
@@ -261,19 +287,30 @@ pub const World = struct {
             }
         }
 
-        var i: usize = 0;
-        while (i < bodies.len) : (i += 1) {
-            var j: usize = i + 1;
-            while (j < bodies.len) : (j += 1) {
-                var a: *Body = &bodies.ptr[i];
-                if (!a.id.isAlive()) { continue; }
-                var b: *Body = &bodies.ptr[j];
-                if (!b.id.isAlive()) { continue; }
-                var c = a.overlaps(b);
-                if (c.depth > 0.0) {
-                    // self.addCollision(c);
-                    c.solve();
+        {
+            var i: usize = 0;
+            while (i < bodies.len) : (i += 1) {
+                var j: usize = i + 1;
+                while (j < bodies.len) : (j += 1) {
+                    var a: *Body = &bodies.ptr[i];
+                    if (!a.id.isAlive()) { continue; }
+                    var b: *Body = &bodies.ptr[j];
+                    if (!b.id.isAlive()) { continue; }
+                    var c = a.overlaps(b);
+                    if (c.depth > 0.0) {
+                        // self.addCollision(c);
+                        c.solve();
+                    }
                 }
+            }
+        }
+
+        {
+            var i: usize = 0;
+            while (i < bodies.len) : (i += 1) {
+                var body: *Body = &bodies.ptr[i];
+                if (!body.id.isAlive()) { continue; }
+                body.tryCopyBack();
             }
         }
     }
