@@ -46,7 +46,9 @@ pub const Body = struct {
     acceleation: Vec3,
 
     moveable: bool,
-    overlapping: bool,
+
+    used_collisions: u3,
+    collisions: [4]Collision,
 
     fn create(dimension: Vec3, moveable: bool) Body {
         return Body{
@@ -59,7 +61,9 @@ pub const Body = struct {
             .entity = null,
 
             .moveable = moveable,
-            .overlapping = false,
+
+            .used_collisions = 0,
+            .collisions = undefined,
         };
     }
 
@@ -72,7 +76,7 @@ pub const Body = struct {
         };
         var collision = no_collison;
 
-        const distance = a.position.sub(b.position);
+        const distance = b.position.sub(a.position);
         const coverage = a.dimension.add(b.dimension).scale(0.5);
         const directions = []Vec3{
             V3(1, 0, 0),
@@ -107,7 +111,30 @@ pub const Body = struct {
         self.velocity = self.velocity.add(self.acceleation.scale(delta));
         self.position = self.position.add(self.velocity.scale(delta));
         self.acceleation = V3(0, 0, 0);
-        self.overlapping = false;
+        self.used_collisions = 0;
+    }
+
+    fn addCollision(self: *Body, collision: Collision) void {
+        if (self.used_collisions == 4) return;
+        self.collisions[self.used_collisions] = collision;
+        self.used_collisions += 1;
+    }
+
+    pub fn isOverlapping(self: Body) bool {
+        return self.used_collisions != 0;
+    }
+
+    pub fn dotCheck(self: Body, dir: Vec3, threshold: f32) bool {
+        var i: @typeOf(self.used_collisions) = 0;
+        while (i < self.used_collisions) : (i += 1) {
+            if (threshold < self.collisions[i].normal.dot(dir))
+                return true;
+        }
+        return false;
+    }
+
+    pub fn getCollision(self: Body) [*]Collision {
+        return self.collisions[0..self.used_collisions];
     }
 
     fn tryCopyBack(self: Body) void {
@@ -123,10 +150,13 @@ pub const Body = struct {
     pub fn draw(self: Body) void {
         const point = DebugDraw.gfx_util.point;
         const line = DebugDraw.gfx_util.line;
-        const color = switch(self.overlapping) {
+        const color = switch(self.isOverlapping()) {
             true => V3(0.5, 0.1, 0.8),
             false => V3(0.8, 0.5, 0.1),
         };
+
+        // log("BODY: {}\n", self.id);
+        // log("{}\n", self);
 
         const p = self.position;
         const d = self.dimension;
@@ -177,47 +207,64 @@ pub const Body = struct {
 // Where to store these?
 pub const Collision = struct {
     const BOUNCE = 0;
-    const SKIN = 0.01;
+    const SKIN = 0.1;
+
     normal: Vec3,
     depth: f32,
+
     a: BodyID,
     b: BodyID,
+
+    /// Returns the collision as if B as A.
+    fn flip(self: Collision) Collision {
+        return Collision{
+            .normal = self.normal.neg(),
+            .depth = self.depth,
+            .a = self.b,
+            .b = self.a,
+        };
+    }
 
     fn solve(self: *Collision) void {
         var a = self.a.dep();
         var b = self.b.dep();
         const total_velocity = a.velocity.add(b.velocity);
-        if (total_velocity.dot(a.position.sub(b.position)) < 0) {
+        const distance = b.position.sub(a.position);
+        const relative_delta = total_velocity.dot(self.normal);
+
+        if (relative_delta < 0) {
             return;
         }
-        a.overlapping = true;
-        b.overlapping = true;
+
         const move_a = @intToFloat(f32, @boolToInt(a.moveable));
         const move_b = @intToFloat(f32, @boolToInt(b.moveable));
         const split = move_a + move_b;
         if (split == 0) {
             return;
         }
-        const total_delta = math.min((self.depth + SKIN) / split, 0.0);
-        a.position = a.position.add(self.normal.scale(total_delta * move_a));
-        b.position = b.position.sub(self.normal.scale(total_delta * move_b));
+        const total_delta = math.max((self.depth - SKIN) / split, 0.0);
+        a.position = a.position.sub(self.normal.scale(total_delta * move_a));
+        b.position = b.position.add(self.normal.scale(total_delta * move_b));
 
-        if (self.depth < SKIN) { return; }
-        const delta_vel = (1 + BOUNCE) * total_velocity.dot(self.normal) / split;
-        a.velocity = a.velocity.add(self.normal.scale(delta_vel * move_a));
-        b.velocity = b.velocity.sub(self.normal.scale(delta_vel * move_b));
+        // if (self.depth < SKIN) { return; }
+        const delta_vel = (1 + BOUNCE) * relative_delta / split;
+        a.velocity = a.velocity.sub(self.normal.scale(delta_vel * move_a));
+        b.velocity = b.velocity.add(self.normal.scale(delta_vel * move_b));
     }
 };
 
 pub const World = struct {
     const BodyList = List(Body);
+    const CollisionList = List(Collision);
 
     next_free: i32,
     bodies: BodyList,
+    collisions: CollisionList,
 
     pub fn init() *World {
         global_world = World{
             .bodies = BodyList.init(A),
+            .collisions = CollisionList.init(A),
             .next_free = 0,
         };
         return &global_world;
@@ -283,6 +330,9 @@ pub const World = struct {
             while (i < bodies.len) : (i += 1) {
                 var body: *Body = &bodies.ptr[i];
                 if (!body.id.isAlive()) { continue; }
+                // const input = @import("input.zig");
+                // if (!input.down(0, input.Event.DEBUG))
+                //  if (body.overlapping) return;
                 body.update(delta);
             }
         }
@@ -298,7 +348,8 @@ pub const World = struct {
                     if (!b.id.isAlive()) { continue; }
                     var c = a.overlaps(b);
                     if (c.depth > 0.0) {
-                        // self.addCollision(c);
+                        a.addCollision(c);
+                        b.addCollision(c.flip());
                         c.solve();
                     }
                 }

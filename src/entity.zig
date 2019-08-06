@@ -83,12 +83,12 @@ pub const Physics = struct {
 
 pub const Player = struct {
     // Camera
-    const FLOOR_HEIGHT: f32 = 0;
     yaw: f32,
     pitch: f32,
 
     height: f32,
-    speed: f32,
+    movement_speed: f32,
+    look_speed: f32,
     jump_speed: f32,
     gravity: f32,
 
@@ -99,7 +99,8 @@ pub const Player = struct {
             .yaw = 0,
             .pitch = 0,
             .height = 1.5,
-            .speed = 10.0,
+            .movement_speed = 10.0,
+            .look_speed = 3.0,
             .jump_speed = 8.0,
             .gravity = -10.0,
             .id = id,
@@ -122,19 +123,20 @@ pub const Player = struct {
                 0);
 
         const rotation = Mat4.rotation(0, self.yaw, 0);
-        movable.linear = movable.linear.add(rotation.mulVec(movement).toV3());
+        movable.linear = movable.linear.add(rotation.mulVec(movement)
+                                                    .toV3()
+                                                    .scale(self.movement_speed));
 
         const damping = math.pow(f32, 1.0 - 0.9, delta);
         const y_vel = movable.linear.y;
         movable.linear = movable.linear.scale(damping);
         movable.linear.y = y_vel;
 
-        player.yaw -= Input.value(player.id, Input.Event.LOOK_X) * delta;
-        player.pitch += Input.value(player.id, Input.Event.LOOK_Y) * delta;
+        player.yaw -= Input.value(player.id, Input.Event.LOOK_X) * self.look_speed * delta;
+        player.pitch += Input.value(player.id, Input.Event.LOOK_Y) * self.look_speed * delta;
 
-        if (transform.position.y <= FLOOR_HEIGHT) {
-            transform.position.y = 0;
-            movable.linear.y = 0;
+        const physics = entity.getPhysics();
+        if (physics.body.dep().dotCheck(V3(0, -1, 0), 0.7)) {
             if (Input.pressed(player.id, Input.Event.JUMP)) {
                 movable.linear.y = self.jump_speed;
             }
@@ -145,7 +147,7 @@ pub const Player = struct {
 
     pub fn getViewMatrix(self: Player, entity: *Entity) Mat4 {
         const pos = entity.getTransform().position;
-        const translation = Mat4.translation(V3(0, self.height, 0).sub(pos));
+        const translation = Mat4.translation(V3(0, -self.height, 0).sub(pos));
         const rotation = Mat4.rotation(self.pitch, self.yaw, 0);
         return rotation.mulMat(translation);
     }
@@ -160,8 +162,7 @@ pub const Drawable = struct {
         if (!entity.has(CT.transform)) return;
         self.program.bind();
         const mat = entity.getTransform().toMat();
-        mat.gfxDump();
-        //mat.dump();
+        //mat.gfxDump();
         self.program.sendModel(mat);
         self.mesh.drawTris();
     }

@@ -11,6 +11,7 @@ pub const Event = enum {
     LOOK_X,
 
     JUMP,
+    DEBUG,
 };
 
 fn hashEvent(player: PlayerId, event: Event) usize {
@@ -176,7 +177,12 @@ const KeyEvent = struct {
             SDL_CONTROLLER_BUTTON_A => Event.JUMP,
             else => Event.NO_INPUT_EVENT,
         };
-        return create(player, event, 1.0);
+        var value_input: f32 = undefined;
+        switch(is_down) {
+            true => { value_input = 1.0; },
+            false => { value_input = 0.0; },
+        }
+        return create(player, event, value_input);
     }
 
     pub fn axis(which: c_int, a: SDL_GameControllerAxis, motion: f32) KeyEvent {
@@ -193,10 +199,13 @@ const KeyEvent = struct {
 
     pub fn key(k: c_int, is_down: bool) KeyEvent {
         var event = switch(k) {
+            SDLK_x => create(0, Event.DEBUG,   1.0),
             SDLK_d => create(0, Event.MOVE_X,  1.0),
             SDLK_a => create(0, Event.MOVE_X, -1.0),
             SDLK_w => create(0, Event.MOVE_Y, -1.0),
             SDLK_s => create(0, Event.MOVE_Y,  1.0),
+            SDLK_1 => create(0, Event.LOOK_Y, -1.0),
+            SDLK_2 => create(0, Event.LOOK_Y,  1.0),
             SDLK_e => create(0, Event.LOOK_X,  1.0),
             SDLK_q => create(0, Event.LOOK_X, -1.0),
             SDLK_ESCAPE => create(0, Event.QUIT, 1.0),

@@ -65,6 +65,8 @@ pub fn main() anyerror!void {
 
     var gfx_util = GFX.DebugDraw.init();
 
+    var world = Phy.World.init();
+
     const program = try GFX.Shader.compile("res/shader.glsl");
     program.bind();
 
@@ -75,12 +77,24 @@ pub fn main() anyerror!void {
 
     var texture = try GFX.Texture.load("res/test.png");
 
+    var player = ecs.create(
+    ECS.Transform{
+        .position = V3(0, 3, 0),
+        .rotation = Quat.identity(),
+        .scale = 1,
+    },
+    ECS.Movable.still(),
+    ECS.Physics.create(V3(0.5, 3, 0.5), true),
+    ECS.Player.create(0),
+    );
+
     _ = ecs.create(
     ECS.Transform{
         .position = V3(0, -10, 0),
         .rotation = Quat.identity(),
         .scale = 5,
     },
+    ECS.Physics.create(V3(10, 10, 10), false),
     ECS.Drawable{
         .mesh = &cube,
         .program = &program,
@@ -88,43 +102,12 @@ pub fn main() anyerror!void {
 
     _ = ecs.create(
     ECS.Transform{
-        .position = V3(0, -4, 0),
+        .position = V3(-10, -8, 0),
         .rotation = Quat.identity(),
-        .scale = 2,
+        .scale = 5,
     },
+    ECS.Physics.create(V3(10, 10, 10), false),
     ECS.Drawable{
-        .mesh = &monkey,
-        .program = &program,
-    });
-
-    var player = ecs.create(
-    ECS.Transform{
-        .position = V3(0, 0, 0),
-        .rotation = Quat.identity(),
-        .scale = 1,
-    },
-    ECS.Movable.still(),
-    ECS.Player.create(0),
-    );
-    var world = Phy.World.init();
-    var body_a = world.create(V3(1, 1, 0.5), true);
-    body_a.dep().position = V3(0, -2, -5);
-
-    var body_b = world.create(V3(1, 0.5, 1.0), true);
-    body_b.dep().position = V3(0, 1, -5);
-    body_b.dep().velocity = V3(0.2, -1, 0.2);
-
-    const entity_a = ecs.create(
-    ECS.Transform{
-        .position = V3(-4, -1, -5),
-        .rotation = Quat.identity(),
-        .scale = 0.5,
-    }, ECS.Movable{
-        .linear = V3(2, -0.3, 0),
-        .rotational = V3(0, 0, 0),
-        .damping = 1,
-    }, ECS.Physics.create(V3(1, 1, 1), true)
-    , ECS.Drawable{
         .mesh = &cube,
         .program = &program,
     });
@@ -146,9 +129,11 @@ pub fn main() anyerror!void {
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
-        const view = player.dep()
+        var view = player.dep()
                            .getPlayer()
                            .getViewMatrix(player.dep());
+
+        // view = Mat4.rotation(1, 2, 0).mulMat(Mat4.translation(V3(-6, -6, 0)));
         program.sendCamera(projection, view);
 
         world.update(delta);
