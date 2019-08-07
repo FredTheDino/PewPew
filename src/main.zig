@@ -70,7 +70,7 @@ pub fn main() anyerror!void {
     const program = try GFX.Shader.compile("res/shader.glsl");
     program.bind();
 
-    var monkey = try loadMesh("res/monkey.obj");
+    // var monkey = try loadMesh("res/monkey.obj");
     var cube = try loadMesh("res/cube.obj");
 
     var ecs = ECS.ECS.init();
@@ -115,6 +115,11 @@ pub fn main() anyerror!void {
     glClearColor(0.1, 0.0, 0.1, 1.0);
     var last_tick: f32 = 0;
     var delta: f32 = 0;
+
+
+    var cam_pos : Vec3 = V3(0, 0, 0);
+    var x_rot : f32= 0;
+    var y_rot : f32= 0;
     while (true) {
         const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
         delta = tick - last_tick;
@@ -129,13 +134,29 @@ pub fn main() anyerror!void {
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         program.update();
-        var view = player.dep()
-                           .getPlayer()
-                           .getViewMatrix(player.dep());
+        var view = player.dep().getPlayer().getViewMatrix(player.dep());
 
-        // view = Mat4.rotation(1, 2, 0).mulMat(Mat4.translation(V3(-6, -6, 0)));
+        if (true) {
+            x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
+            y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
+            const rot = Mat4.rotation(y_rot, x_rot, 0);
+
+            const vel = V4(4 * Input.value(0, Input.Event.MOVE_X) * delta,
+                           0,
+                           4 * Input.value(0, Input.Event.MOVE_Y) * delta,
+                           0);
+            cam_pos = cam_pos.sub(rot.mulVec(vel).toV3());
+            view = rot.mulMat(Mat4.translation(cam_pos));
+        }
         program.sendCamera(projection, view);
 
+        {
+            const dir = view.mulVec(V4(0, 0, -1, 0)).toV3();
+            const offset = view.mulVec(V4(0, 0, -1, 0)).toV3();
+            const p = player.dep().getTransform().position.add(offset);
+            var hit = world.raycast(p, dir);
+            hit.gfxDump();
+        }
         world.update(delta);
         world.draw();
 

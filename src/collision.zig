@@ -67,6 +67,49 @@ pub const Body = struct {
         };
     }
 
+    pub fn raycast(a: Body, origin: Vec3, direction: Vec3) RayHit {
+        // TODO: Assumes box
+        assert(math.fabs(direction.lengthSq() - 1.0) < 0.01);
+        var best_hit = RayHit.noHit();
+        const normals = []Vec3{
+            V3( 1,  0,  0),
+            V3( 0,  1,  0),
+            V3( 0,  0,  1),
+            V3(-1,  0,  0),
+            V3( 0, -1,  0),
+            V3( 0,  0, -1),
+        };
+        const point = DebugDraw.gfx_util.point;
+        const p = a.position.sub(origin);
+        for (normals) |n| {
+            // TODO: Clean up this code... Maybe it can be simplified?
+            if (n.dot(direction) > 0) continue;
+            const center_relative_origin
+                        = p.add(n.scale(math.fabs(n.dot(a.dimension) * 0.5)));
+            const devisor = n.dot(direction);
+            if (devisor == 0) continue;
+            const d = center_relative_origin.dot(n);
+            const t = d / devisor;
+            if (t <= 0) continue;
+            const hit_position = origin.add(direction.scale(t));
+            const rect_dim = a.dimension.sub(n.scale(n.dot(a.dimension))).scale(0.5);
+            const center = center_relative_origin.add(origin);
+            const offset = hit_position.sub(center).abs();
+            if (offset.x > rect_dim.x or
+                offset.y > rect_dim.y or
+                offset.z > rect_dim.z) continue;
+            var hit = RayHit{
+                .body = a.id,
+                .t = t,
+                .position = hit_position,
+                .normal = n,
+            };
+            if (hit.closer(best_hit))
+                best_hit = hit;
+        }
+        return best_hit;
+    }
+
     pub fn overlaps(a: *Body, b: *Body) Collision {
         const no_collison = Collision{
             .normal = V3(0, 0, 0),
@@ -253,6 +296,43 @@ pub const Collision = struct {
     }
 };
 
+
+pub const RayHit = struct {
+    body: BodyID,
+    t: f32,
+    position: Vec3,
+    normal: Vec3,
+
+    pub fn noHit() RayHit {
+        return RayHit{
+            .body = undefined,
+            .t = 0,
+            .position = V3(0, 0, 0),
+            .normal = V3(0, 0, 0),
+        };
+    }
+
+    pub fn gfxDump(hit: RayHit) void {
+        const point = DebugDraw.gfx_util.point;
+        const line = DebugDraw.gfx_util.line;
+        const color = hit.normal.add(V3(0.5, 0.5, 0.5)).scale(2);
+        point(hit.position, V3(1, 0, 1));
+        line(hit.position, hit.position.add(hit.normal), color);
+    }
+
+    pub fn isHit(a: RayHit) bool {
+        return a.normal.lengthSq() != 0;
+    }
+
+    pub fn closer(a: RayHit, b: RayHit) bool {
+        if (!a.isHit())
+            return false;
+        if (a.isHit() and !b.isHit())
+            return true;
+        return a.t < b.t;
+    }
+};
+
 pub const World = struct {
     const BodyList = List(Body);
     const CollisionList = List(Collision);
@@ -260,6 +340,22 @@ pub const World = struct {
     next_free: i32,
     bodies: BodyList,
     collisions: CollisionList,
+
+    pub fn raycast(self: *World, origin: Vec3, direction: Vec3) RayHit {
+        // TODO: ASSUMES ALL BODIES ARE BOXES
+        assert(math.fabs(direction.lengthSq() - 1.0) < 0.01);
+        var best_hit = RayHit.noHit();
+        var bodies = &self.bodies.toSlice();
+        var i: usize = 0;
+        while (i < bodies.len) : (i += 1) {
+            var body: *Body = &bodies.ptr[i];
+            if (!body.id.isAlive()) { continue; }
+            var hit = body.raycast(origin, direction);
+            if (hit.closer(best_hit))
+                best_hit = hit;
+        }
+        return best_hit;
+    }
 
     pub fn init() *World {
         global_world = World{
@@ -324,7 +420,7 @@ pub const World = struct {
 
     pub fn update(self: *World, delta: f32) void {
         // TODO: This can be made a lot smarter
-        var bodies = &global_world.bodies.toSlice();
+        var bodies = &self.bodies.toSlice();
         {
             var i: usize = 0;
             while (i < bodies.len) : (i += 1) {
