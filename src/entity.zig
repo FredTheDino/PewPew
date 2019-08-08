@@ -90,6 +90,7 @@ pub const Player = struct {
     movement_speed: f32,
     look_speed: f32,
     jump_speed: f32,
+    spread: f32,
     gravity: f32,
 
     id: Input.PlayerId,
@@ -102,6 +103,7 @@ pub const Player = struct {
             .movement_speed = 10.0,
             .look_speed = 3.0,
             .jump_speed = 8.0,
+            .spread = 0.2,
             .gravity = -10.0,
             .id = id,
         };
@@ -136,12 +138,40 @@ pub const Player = struct {
         player.pitch += Input.value(player.id, Input.Event.LOOK_Y) * self.look_speed * delta;
 
         const physics = entity.getPhysics();
-        if (physics.body.dep().dotCheck(V3(0, -1, 0), 0.7)) {
+        const body: *Phy.Body = physics.body.dep();
+        if (body.dotCheck(V3(0, -1, 0), 0.7)) {
             if (Input.pressed(player.id, Input.Event.JUMP)) {
                 movable.linear.y = self.jump_speed;
             }
         } else {
             movable.linear.y += self.gravity * delta;
+        }
+        // TODO: Clip and shooting spacing.
+        if (Input.pressed(player.id, Input.Event.SHOOT)) {
+            // TODO: Better random
+            const spread_x = @intToFloat(f32, @mod(rand(), 255)) / 255.0 - 0.5;
+            const spread_y = @intToFloat(f32, @mod(rand(), 255)) / 255.0 - 0.5;
+            const view = Mat4.rotation(self.pitch, self.yaw, 0);
+            const dir = view.mulVec(V4(spread_x * self.spread,
+                                       spread_y * self.spread,
+                                       -1,
+                                       0)).toV3()
+                                          .normalized();
+            const offset = V3(0, self.height, 0);
+            const p = entity.getTransform().position.add(offset);
+            var hit = Phy.global_world.raycast_ignore(
+                p,
+                dir,
+                entity.getPhysics().body);
+            if (hit.isHit()) {
+                // TODO: Cool hit effect
+                hit.gfxDump();
+                var hit_body = hit.body.dep();
+                if (hit_body.entity) |hit_id| {
+                    global_ecs.remove(hit_id);
+                    Phy.global_world.remove(hit.body);
+                }
+            }
         }
     }
 

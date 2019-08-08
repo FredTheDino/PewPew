@@ -116,7 +116,6 @@ pub fn main() anyerror!void {
     var last_tick: f32 = 0;
     var delta: f32 = 0;
 
-
     var cam_pos : Vec3 = V3(0, 0, 0);
     var x_rot : f32= 0;
     var y_rot : f32= 0;
@@ -136,7 +135,7 @@ pub fn main() anyerror!void {
         program.update();
         var view = player.dep().getPlayer().getViewMatrix(player.dep());
 
-        if (true) {
+        if (false) {
             x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
             y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
             const rot = Mat4.rotation(y_rot, x_rot, 0);
@@ -150,13 +149,6 @@ pub fn main() anyerror!void {
         }
         program.sendCamera(projection, view);
 
-        {
-            const dir = view.mulVec(V4(0, 0, -1, 0)).toV3();
-            const offset = view.mulVec(V4(0, 0, -1, 0)).toV3();
-            const p = player.dep().getTransform().position.add(offset);
-            var hit = world.raycast(p, dir);
-            hit.gfxDump();
-        }
         world.update(delta);
         world.draw();
 

@@ -18,8 +18,16 @@ pub const BodyID = struct {
     pos: i32,
     gen: u32,
 
+    pub fn equals(a: BodyID, b: BodyID) bool {
+        return a.pos == b.pos and b.gen == a.gen;
+    }
+
     pub fn isAlive(self: BodyID) bool {
         return self.pos >= 0;
+    }
+
+    pub fn isValid(self: BodyID, pos: var) bool {
+        return self.isAlive() and @intCast(i32, pos) == self.pos;
     }
 
     pub fn de(self: BodyID) ?*Body {
@@ -342,6 +350,16 @@ pub const World = struct {
     collisions: CollisionList,
 
     pub fn raycast(self: *World, origin: Vec3, direction: Vec3) RayHit {
+        return self.raycast_ignore(self,
+                                   origin,
+                                   direction,
+                                   BodyID{ .gen=-1, .pos=-1 });
+    }
+
+    pub fn raycast_ignore(self: *World,
+                          origin: Vec3,
+                          direction: Vec3,
+                          ignore: BodyID) RayHit {
         // TODO: ASSUMES ALL BODIES ARE BOXES
         assert(math.fabs(direction.lengthSq() - 1.0) < 0.01);
         var best_hit = RayHit.noHit();
@@ -349,7 +367,8 @@ pub const World = struct {
         var i: usize = 0;
         while (i < bodies.len) : (i += 1) {
             var body: *Body = &bodies.ptr[i];
-            if (!body.id.isAlive()) { continue; }
+            if (body.id.equals(ignore)) continue;
+            if (!body.id.isValid(i)) continue;
             var hit = body.raycast(origin, direction);
             if (hit.closer(best_hit))
                 best_hit = hit;
@@ -392,6 +411,7 @@ pub const World = struct {
         var body = Body.create(dimension, moveable);
         var id = self.genId() orelse unreachable;
         body.id = id;
+        log("ADD BODY\n");
         self.bodies.set(@intCast(usize, id.pos), body);
         return id;
     }
@@ -401,6 +421,7 @@ pub const World = struct {
         inline while(i < args.len) : (i += 1) {
             const id: BodyID = args[i];
             const b: *Body = id.de() orelse continue;
+            log("REMOVE BODY\n");
             const curr = self.next_free;
             self.next_free = -(1 + b.id.pos);
             b.id.pos = curr;
@@ -413,7 +434,7 @@ pub const World = struct {
         var i: usize = 0;
         while (i < bodies.len) : (i += 1) {
             var body: *Body = &bodies.ptr[i];
-            if (!body.id.isAlive()) { continue; }
+            if (!body.id.isValid(i)) continue;
             body.draw();
         }
     }
@@ -425,7 +446,7 @@ pub const World = struct {
             var i: usize = 0;
             while (i < bodies.len) : (i += 1) {
                 var body: *Body = &bodies.ptr[i];
-                if (!body.id.isAlive()) { continue; }
+                if (!body.id.isValid(i)) continue;
                 // const input = @import("input.zig");
                 // if (!input.down(0, input.Event.DEBUG))
                 //  if (body.overlapping) return;
@@ -436,12 +457,12 @@ pub const World = struct {
         {
             var i: usize = 0;
             while (i < bodies.len) : (i += 1) {
+                var a: *Body = &bodies.ptr[i];
+                if (!a.id.isValid(i)) continue;
                 var j: usize = i + 1;
                 while (j < bodies.len) : (j += 1) {
-                    var a: *Body = &bodies.ptr[i];
-                    if (!a.id.isAlive()) { continue; }
                     var b: *Body = &bodies.ptr[j];
-                    if (!b.id.isAlive()) { continue; }
+                    if (!b.id.isValid(j)) continue;
                     var c = a.overlaps(b);
                     if (c.depth > 0.0) {
                         a.addCollision(c);
@@ -456,7 +477,7 @@ pub const World = struct {
             var i: usize = 0;
             while (i < bodies.len) : (i += 1) {
                 var body: *Body = &bodies.ptr[i];
-                if (!body.id.isAlive()) { continue; }
+                if (!body.id.isValid(i)) continue;
                 body.tryCopyBack();
             }
         }
