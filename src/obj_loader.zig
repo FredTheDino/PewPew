@@ -5,7 +5,7 @@ const Vertex = @import("graphics.zig").Vertex;
 const ArrayList = std.ArrayList;
 const FloatBuffer = ArrayList(real);
 const VertexBuffer = ArrayList(Vertex);
-const File = std.os.File;
+const File = std.fs.File;
 
 
 fn nextLine(read_head: usize, buffer: []u8) usize {

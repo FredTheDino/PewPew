@@ -79,7 +79,7 @@ pub const Body = struct {
         // TODO: Assumes box
         assert(math.fabs(direction.lengthSq() - 1.0) < 0.01);
         var best_hit = RayHit.noHit();
-        const normals = []Vec3{
+        const normals = [_]Vec3{
             V3( 1,  0,  0),
             V3( 0,  1,  0),
             V3( 0,  0,  1),
@@ -129,7 +129,7 @@ pub const Body = struct {
 
         const distance = b.position.sub(a.position);
         const coverage = a.dimension.add(b.dimension).scale(0.5);
-        const directions = []Vec3{
+        const directions = [_]Vec3{
             V3(1, 0, 0),
             V3(0, 1, 0),
             V3(0, 0, 1),
@@ -205,9 +205,6 @@ pub const Body = struct {
             true => V3(0.5, 0.1, 0.8),
             false => V3(0.8, 0.5, 0.1),
         };
-
-        // log("BODY: {}\n", self.id);
-        // log("{}\n", self);
 
         const p = self.position;
         const d = self.dimension;
@@ -411,7 +408,6 @@ pub const World = struct {
         var body = Body.create(dimension, moveable);
         var id = self.genId() orelse unreachable;
         body.id = id;
-        log("ADD BODY\n");
         self.bodies.set(@intCast(usize, id.pos), body);
         return id;
     }
@@ -421,7 +417,6 @@ pub const World = struct {
         inline while(i < args.len) : (i += 1) {
             const id: BodyID = args[i];
             const b: *Body = id.de() orelse continue;
-            log("REMOVE BODY\n");
             const curr = self.next_free;
             self.next_free = -(1 + b.id.pos);
             b.id.pos = curr;

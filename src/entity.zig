@@ -85,6 +85,7 @@ pub const Player = struct {
     // Camera
     yaw: f32,
     pitch: f32,
+    health: u32,
 
     height: f32,
     movement_speed: f32,
@@ -99,6 +100,8 @@ pub const Player = struct {
         return Player{
             .yaw = 0,
             .pitch = 0,
+            .health = 10,
+
             .height = 1.5,
             .movement_speed = 10.0,
             .look_speed = 3.0,
@@ -166,12 +169,24 @@ pub const Player = struct {
             if (hit.isHit()) {
                 // TODO: Cool hit effect
                 hit.gfxDump();
-                var hit_body = hit.body.dep();
-                if (hit_body.entity) |hit_id| {
-                    global_ecs.remove(hit_id);
-                    Phy.global_world.remove(hit.body);
+                var other_body = hit.body.dep();
+                if (other_body.entity) |other_id| {
+                    var other_entity = other_id.dep();
+                    if (other_entity.has(CT.player)) {
+                        other_entity.getPlayer().hitByBullet(other_entity, hit);
+                    }
                 }
             }
+        }
+    }
+
+    fn hitByBullet(self: *Player, entity: *Entity, hit: Phy.RayHit) void {
+        var movable = entity.getMoveable();
+        movable.linear = movable.linear.add(hit.normal.scale(-2));
+
+        self.health -= 1;
+        if (self.health == 0) {
+            global_ecs.remove(entity.id);
         }
     }
 
@@ -281,7 +296,7 @@ pub const Entity = struct {
 
     pub fn init(self: *ECS) Entity {
         var e = Entity{
-            .active_components = []bool{false} ** @memberCount(C),
+            .active_components = [_]bool{false} ** @memberCount(C),
             .components = undefined,
             .id = EntityID { .pos = 0, .gen = 0, },
         };
@@ -309,6 +324,9 @@ pub const Entity = struct {
 
     pub fn remove(self: *Entity, args: ...) void {
         comptime var i = 0;
+        if (self.has(CT.physics)) {
+            Phy.global_world.remove(self.getPhysics().body);
+        }
         inline while (i < args.len) : (i += 1) {
             self.active_components[@enumToInt(args[i])] = false;
         }
@@ -433,6 +451,7 @@ pub const ECS = struct {
         inline while(i < args.len) : (i += 1) {
             const id: EntityID = args[i];
             const e: *Entity = id.de() orelse continue;
+            e.remove();
             const curr = self.next_free;
             self.next_free = -(1 + e.id.pos);
             e.id.pos = curr;

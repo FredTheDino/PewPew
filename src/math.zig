@@ -266,7 +266,7 @@ pub const Mat4 = packed struct {
     pub fn mulMat(self: Mat4, other: Mat4) Mat4 {
         var out: Mat4 = zero();
 
-        const indicies = []u32{0, 1, 2, 3};
+        const indicies = [_]u32{0, 1, 2, 3};
         inline for (indicies) |row| {
             inline for (indicies) |col| {
                 inline for (indicies) |i| {
@@ -278,10 +278,10 @@ pub const Mat4 = packed struct {
     }
 
     pub fn mulVec(self: Mat4, other: Vec4) Vec4 {
-        const in = []real {other.x, other.y, other.z, other.w};
-        var out = []real {0, 0, 0, 0};
+        const in = [_]real {other.x, other.y, other.z, other.w};
+        var out = [_]real {0, 0, 0, 0};
 
-        const indicies = []u32{0, 1, 2, 3};
+        const indicies = [_]u32{0, 1, 2, 3};
         inline for (indicies) |row| {
             inline for (indicies) |i| {
                 out[row] += self.v[i][row] * in[i];

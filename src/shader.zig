@@ -1,6 +1,6 @@
 use @import("import.zig");
 
-const File = std.os.File;
+const File = std.fs.File;
 
 // TODO: Cache the locations.
 
@@ -141,6 +141,13 @@ outer:
         const loc_color_texture = glGetUniformLocation(shader.program, c"color_texture");
         glUniform1i(loc_use_color, 0);
         glUniform1i(loc_color_texture, texture_id);
+    }
+
+    pub fn minMax(shader: Shader, min: Vec2, max: Vec2) void {
+        const loc_min_pos = glGetUniformLocation(shader.program, c"min_pos");
+        const loc_max_pos = glGetUniformLocation(shader.program, c"max_pos");
+        glUniform2f(loc_min_pos, min.x, min.y);
+        glUniform2f(loc_max_pos, max.x, max.y);
     }
 
     /// Don't render any colors

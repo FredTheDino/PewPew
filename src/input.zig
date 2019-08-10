@@ -125,7 +125,7 @@ pub fn update() void {
                 // TODO: Other controllers need work, like the PS4
                 // Game pad is actually 2 game pads, one for motion
                 // and one for the normal stuff.
-                if (event.caxis.which != 0) { continue; }
+                if (@mod(event.caxis.which, 2) == 1) { continue; }
                 const raw_motion = event.caxis.value;
                 var motion = @intToFloat(f32, raw_motion) /
                              @intToFloat(f32, 0x7FFF);
@@ -168,7 +168,7 @@ const KeyEvent = struct {
     }
 
     fn controllerToPlayer(c: c_int) PlayerId {
-        return @intCast(PlayerId, c);
+        return @intCast(PlayerId, @divTrunc(c, 2));
     }
 
     pub fn button(which: c_int, b: c_int, is_down: bool) KeyEvent {
@@ -217,21 +217,6 @@ const KeyEvent = struct {
             event.value = 0.0;
         return event;
     }
-
-    fn keyToEvent(k: c_int) Event {
-    }
-
-    fn keyToPlayer(k: c_int) PlayerId {
-        return 0;
-    }
-
-    fn buttonToEvent(b: c_int) Event {
-    }
-
-    fn axisToEvent(a: SDL_GameControllerAxis) Event {
-    }
-
-
 };
 
 fn process(key_event: KeyEvent) void {

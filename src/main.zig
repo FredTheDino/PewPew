@@ -14,15 +14,12 @@ pub const ECS = @import("entity.zig");
 
 //    - Entity System (pass 1)
 // TODO:
-//    - Better way of doing input
 //    - Model loading
 //      o Shading
 //      o Shadow maps :o
 //    - Split screen
-//    - Mouse Controls
-//    - Player Movement (Multi player?)
-//    - Collision (box vs line and box vs box) (AABB or boxes?)
-//    - Controller support
+//    - Mouse Controls (No?)
+//      - Player models
 //
 //    - Sound thread
 //    - Asset system?
@@ -55,8 +52,11 @@ pub fn main() anyerror!void {
                                   window_height,
                                   SDL_WINDOW_OPENGL);
 
+    _ = SDL_GL_SetAttribute(@intToEnum(SDL_GLattr, SDL_GL_CONTEXT_MAJOR_VERSION), 3);
+    _ = SDL_GL_SetAttribute(@intToEnum(SDL_GLattr, SDL_GL_CONTEXT_MINOR_VERSION), 1);
     var context = SDL_GL_CreateContext(window);
     assert(gladLoadGL() != 0);
+
 
     onResize(window_width, window_height);
 
@@ -68,16 +68,16 @@ pub fn main() anyerror!void {
     var world = Phy.World.init();
 
     const program = try GFX.Shader.compile("res/shader.glsl");
-    program.bind();
 
     // var monkey = try loadMesh("res/monkey.obj");
     var cube = try loadMesh("res/cube.obj");
+    var cone = try loadMesh("res/player.obj");
 
     var ecs = ECS.ECS.init();
 
     var texture = try GFX.Texture.load("res/test.png");
 
-    var player = ecs.create(
+    var player_a = ecs.create(
     ECS.Transform{
         .position = V3(0, 3, 0),
         .rotation = Quat.identity(),
@@ -86,6 +86,25 @@ pub fn main() anyerror!void {
     ECS.Movable.still(),
     ECS.Physics.create(V3(0.5, 3, 0.5), true),
     ECS.Player.create(0),
+    ECS.Drawable{
+        .program = &program,
+        .mesh = &cone,
+    },
+    );
+
+    var player_b = ecs.create(
+    ECS.Transform{
+        .position = V3(-3, 4, 0),
+        .rotation = Quat.identity(),
+        .scale = 1,
+    },
+    ECS.Movable.still(),
+    ECS.Physics.create(V3(0.5, 3, 0.5), true),
+    ECS.Player.create(1),
+    ECS.Drawable{
+        .program = &program,
+        .mesh = &cone,
+    },
     );
 
     _ = ecs.create(
@@ -100,6 +119,15 @@ pub fn main() anyerror!void {
         .program = &program,
     });
 
+    var post_processing_shader = try GFX.Shader.compile("res/post_process.glsl");
+    var framebuffer_a = try GFX.Framebuffer.create(&post_processing_shader,
+                                                 @intCast(u32, window_width),
+                                                 @intCast(u32, @divTrunc(window_height, 2)));
+
+    var framebuffer_b = try GFX.Framebuffer.create(&post_processing_shader,
+                                                 @intCast(u32, window_width),
+                                                 @intCast(u32, @divTrunc(window_height, 2)));
+
     _ = ecs.create(
     ECS.Transform{
         .position = V3(-10, -8, 0),
@@ -112,7 +140,7 @@ pub fn main() anyerror!void {
         .program = &program,
     });
 
-    glClearColor(0.1, 0.0, 0.1, 1.0);
+
     var last_tick: f32 = 0;
     var delta: f32 = 0;
 
@@ -128,14 +156,24 @@ pub fn main() anyerror!void {
         if (Input.down(0, Input.Event.QUIT))
             break;
 
-        program.setTexture(0);
-        texture.bind(0);
+        world.update(delta);
 
+
+
+        var view: Mat4 = undefined;
+        const split_screen = false;
+        const debug_cam = false;
+        const debug_draw = false;
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(0.0, 0.1, 0.1, 1.0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        program.update();
-        var view = player.dep().getPlayer().getViewMatrix(player.dep());
+        if (debug_draw) {
+            view = player_a.dep().getPlayer().getViewMatrix(player_a.dep());
+            glViewport(0, 0,
+                    @intCast(c_int, screen_width),
+                    @intCast(c_int, screen_height));
 
-        if (false) {
             x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
             y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
             const rot = Mat4.rotation(y_rot, x_rot, 0);
@@ -146,18 +184,57 @@ pub fn main() anyerror!void {
                            0);
             cam_pos = cam_pos.sub(rot.mulVec(vel).toV3());
             view = rot.mulMat(Mat4.translation(cam_pos));
+
+
         }
-        program.sendCamera(projection, view);
 
-        world.update(delta);
-        world.draw();
+        var i: u2 = 0;
+        while (i < 2) : (i += 1) {
+            var player = switch(i) {
+                0 => player_a,
+                else => player_b,
+            };
+            var framebuffer = switch(i) {
+                0 => framebuffer_a,
+                else => framebuffer_b,
+            };
 
-        gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
-        gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
-        gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+            framebuffer.bind();
+            view = player.dep().getPlayer().getViewMatrix(player.dep());
+            glClearColor(0.1, 0.0, 0.1, 1.0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            program.bind();
+            program.update();
+            program.sendCamera(projection, view);
 
-        ecs.update(delta);
-        gfx_util.draw(program);
+            program.setTexture(0);
+            texture.bind(0);
+            // TODO: Only call draw here.
+            ecs.update(delta);
+
+            switch(i) {
+                0 => {
+                    program.bind();
+                    gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+                    gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+                    gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+
+                    world.draw();
+                    gfx_util.draw(program);
+
+                    framebuffer.render_to_screen(window_width,
+                            window_height,
+                            V2(-1, -1),
+                            V2(1, 0));
+                },
+                else => {
+                    framebuffer.render_to_screen(window_width,
+                            window_height,
+                            V2(-1, 0),
+                            V2(1, 1));
+                },
+            }
+        }
 
         SDL_GL_SwapWindow(window);
     }

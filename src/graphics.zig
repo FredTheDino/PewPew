@@ -130,7 +130,7 @@ pub const Texture = struct {
 
     pub fn load(path: []const u8) !Texture {
         const warn = @import("std").debug.warn;
-        const File = @import("std").os.File;
+        const File = @import("std").fs.File;
         var texture: Texture = undefined;
 
         var file = try File.openRead(path);
@@ -341,3 +341,104 @@ pub const Mesh = struct {
         glBindVertexArray(0);
     }
 };
+
+pub const Framebuffer = struct {
+    shader: *Shader,
+    fbo: c_uint,
+    texture: c_uint,
+    depth_buffer: c_uint,
+
+    width: u32,
+    height: u32,
+
+    var needs_initialization = true;
+    pub var plane: Mesh = undefined;
+    /// "min" and "max" is in normalized device coordinates.
+    pub fn render_to_screen(self: Framebuffer,
+                            screen_width: i32,
+                            screen_height: i32,
+                            min: Vec2,
+                            max: Vec2) void {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0,
+                   @intCast(c_int, screen_width),
+                   @intCast(c_int, screen_height));
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, self.texture);
+        self.shader.bind();
+        self.shader.update();
+        self.shader.setTexture(0);
+        self.shader.minMax(min, max);
+        plane.drawTris();
+    }
+
+    pub fn create(shader: *Shader, width: u32, height: u32) !Framebuffer {
+        if (needs_initialization) {
+            needs_initialization = false;
+            plane  = Mesh.createSimple([_]Vertex{
+                Vertex.p(-1.0, -1.0, 0.0),
+                Vertex.p( 1.0, -1.0, 0.0),
+                Vertex.p( 1.0,  1.0, 0.0),
+
+                Vertex.p(-1.0, -1.0, 0.0),
+                Vertex.p( 1.0,  1.0, 0.0),
+                Vertex.p(-1.0,  1.0, 0.0),
+            });
+        }
+        var buffer = Framebuffer{
+            .shader = shader,
+            .width = width,
+            .height = height,
+            .fbo = 0,
+            .texture = 0,
+            .depth_buffer = 0,
+        };
+        glGenFramebuffers(1, &buffer.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, buffer.fbo);
+
+        glGenTextures(1, &buffer.texture);
+
+        glBindTexture(GL_TEXTURE_2D, buffer.texture);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                     @intCast(c_int, width), @intCast(c_int, height),
+                     0,
+                     GL_RGB,
+                     GL_UNSIGNED_BYTE,
+                     @intToPtr(*allowzero c_int, 0));
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+        glGenRenderbuffers(1, &buffer.depth_buffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, buffer.depth_buffer);
+        glRenderbufferStorage(GL_RENDERBUFFER,
+                              GL_DEPTH_COMPONENT,
+                              @intCast(c_int, width), @intCast(c_int, height));
+
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER,
+                                  GL_DEPTH_ATTACHMENT,
+                                  GL_RENDERBUFFER,
+                                  buffer.depth_buffer);
+
+        glFramebufferTexture(GL_FRAMEBUFFER,
+                             GL_COLOR_ATTACHMENT0,
+                             buffer.texture,
+                             0);
+
+        const draw_buffers: c_uint = GL_COLOR_ATTACHMENT0;
+        glDrawBuffers(1, &draw_buffers);
+
+        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            return error.FailedToCreateFramebuffer;
+
+        return buffer;
+    }
+
+    pub fn bind(self: Framebuffer) void {
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo);
+        glViewport(0, 0, @intCast(c_int, self.width), @intCast(c_int, self.height));
+    }
+};
+
