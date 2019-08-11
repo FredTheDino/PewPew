@@ -87,7 +87,7 @@ pub fn main() anyerror!void {
     ECS.Physics.create(V3(0.5, 3, 0.5), true),
     ECS.Player.create(0),
     ECS.Drawable{
-        .program = &program,
+        .texture = &texture,
         .mesh = &cone,
     },
     );
@@ -102,10 +102,19 @@ pub fn main() anyerror!void {
     ECS.Physics.create(V3(0.5, 3, 0.5), true),
     ECS.Player.create(1),
     ECS.Drawable{
-        .program = &program,
+        .texture = &texture,
         .mesh = &cone,
     },
     );
+
+    var post_processing_shader = try GFX.Shader.compile("res/post_process.glsl");
+    const players = [_]ECS.EntityID{ player_a, player_b };
+    for (players) |player| {
+        var player_comp = player.dep().getPlayer();
+        player_comp.framebuffer = try GFX.Framebuffer.create(&post_processing_shader,
+                @intCast(u32, window_width),
+                @intCast(u32, @divTrunc(window_height, @intCast(i32, players.len))));
+    }
 
     _ = ecs.create(
     ECS.Transform{
@@ -116,13 +125,9 @@ pub fn main() anyerror!void {
     ECS.Physics.create(V3(10, 10, 10), false),
     ECS.Drawable{
         .mesh = &cube,
-        .program = &program,
+        .texture = &texture,
     });
 
-    var post_processing_shader = try GFX.Shader.compile("res/post_process.glsl");
-    var framebuffer_a = try GFX.Framebuffer.create(&post_processing_shader,
-                                                 @intCast(u32, window_width),
-                                                 @intCast(u32, @divTrunc(window_height, 2)));
 
     var framebuffer_b = try GFX.Framebuffer.create(&post_processing_shader,
                                                  @intCast(u32, window_width),
@@ -137,7 +142,7 @@ pub fn main() anyerror!void {
     ECS.Physics.create(V3(10, 10, 10), false),
     ECS.Drawable{
         .mesh = &cube,
-        .program = &program,
+        .texture = &texture,
     });
 
 
@@ -157,22 +162,26 @@ pub fn main() anyerror!void {
             break;
 
         world.update(delta);
+        ecs.update(delta);
 
 
 
         var view: Mat4 = undefined;
         const split_screen = false;
-        const debug_cam = false;
-        const debug_draw = false;
+        const debug_cam = true;
+        const debug_draw = true;
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0, 0.1, 0.1, 1.0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (debug_draw) {
-            view = player_a.dep().getPlayer().getViewMatrix(player_a.dep());
+        if (debug_cam) {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0,
-                    @intCast(c_int, screen_width),
-                    @intCast(c_int, screen_height));
+                       @intCast(c_int, window_width),
+                       @intCast(c_int, window_height));
+
+            glClearColor(0.2, 0.1, 0.0, 1.0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
             y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
@@ -185,35 +194,35 @@ pub fn main() anyerror!void {
             cam_pos = cam_pos.sub(rot.mulVec(vel).toV3());
             view = rot.mulMat(Mat4.translation(cam_pos));
 
-
-        }
-
-        var i: u2 = 0;
-        while (i < 2) : (i += 1) {
-            var player = switch(i) {
-                0 => player_a,
-                else => player_b,
-            };
-            var framebuffer = switch(i) {
-                0 => framebuffer_a,
-                else => framebuffer_b,
-            };
-
-            framebuffer.bind();
-            view = player.dep().getPlayer().getViewMatrix(player.dep());
-            glClearColor(0.1, 0.0, 0.1, 1.0);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             program.bind();
             program.update();
             program.sendCamera(projection, view);
+            ecs.draw(program);
 
-            program.setTexture(0);
-            texture.bind(0);
-            // TODO: Only call draw here.
-            ecs.update(delta);
+            if (debug_draw) {
+                program.bind();
+                gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+                gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+                gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
 
-            switch(i) {
-                0 => {
+                world.draw();
+                gfx_util.draw(program);
+            }
+        } else {
+            // Normal render path
+            for (players) |player_id, i| {
+                var player_comp = player_id.dep().getPlayer();
+                var framebuffer = player_comp.framebuffer;
+                framebuffer.bind();
+
+                view = player_comp.getViewMatrix();
+
+                program.bind();
+                program.update();
+                program.sendCamera(projection, view);
+                ecs.draw(program);
+
+                if (debug_draw and i == 0) {
                     program.bind();
                     gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
                     gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
@@ -221,21 +230,25 @@ pub fn main() anyerror!void {
 
                     world.draw();
                     gfx_util.draw(program);
+                }
 
-                    framebuffer.render_to_screen(window_width,
-                            window_height,
-                            V2(-1, -1),
-                            V2(1, 0));
-                },
-                else => {
-                    framebuffer.render_to_screen(window_width,
-                            window_height,
-                            V2(-1, 0),
-                            V2(1, 1));
-                },
+                // TODO: Loft to function? Should this be stored on the player?
+                var min: Vec2 = undefined;
+                var max: Vec2 = undefined;
+                switch (players.len) {
+                    1 => {
+                        min = V2(-1, -1);
+                        max = V2(1, 1);
+                    },
+                      2 => {
+                          min = V2(-1, -1 + @intToFloat(f32, i));
+                          max = V2(1, 0 + @intToFloat(f32, i));
+                      },
+                      else => unreachable,
+                }
+                framebuffer.render_to_screen(window_width, window_height, min, max);
             }
         }
-
         SDL_GL_SwapWindow(window);
     }
 }

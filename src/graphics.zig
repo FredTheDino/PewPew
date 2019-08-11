@@ -439,6 +439,9 @@ pub const Framebuffer = struct {
     pub fn bind(self: Framebuffer) void {
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo);
         glViewport(0, 0, @intCast(c_int, self.width), @intCast(c_int, self.height));
+
+        glClearColor(0.1, 0.0, 0.1, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 };
 

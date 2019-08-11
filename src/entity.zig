@@ -94,7 +94,9 @@ pub const Player = struct {
     spread: f32,
     gravity: f32,
 
+    owner: EntityID,
     id: Input.PlayerId,
+    framebuffer: GFX.Framebuffer,
 
     pub fn create(id: PlayerId) Player {
         return Player{
@@ -108,10 +110,12 @@ pub const Player = struct {
             .jump_speed = 8.0,
             .spread = 0.2,
             .gravity = -10.0,
+
             .id = id,
+            .owner = undefined,
+            .framebuffer = undefined,
         };
     }
-
 
     pub fn update(self: Player, entity: *Entity, delta: f32) void {
         // TODO: Agressive, it crashes if it doesn't exist, is this smart?
@@ -190,7 +194,8 @@ pub const Player = struct {
         }
     }
 
-    pub fn getViewMatrix(self: Player, entity: *Entity) Mat4 {
+    pub fn getViewMatrix(self: Player) Mat4 {
+        const entity = self.owner.dep();
         const pos = entity.getTransform().position;
         const translation = Mat4.translation(V3(0, -self.height, 0).sub(pos));
         const rotation = Mat4.rotation(self.pitch, self.yaw, 0);
@@ -198,17 +203,21 @@ pub const Player = struct {
     }
 };
 
+// TODO: Material system
 pub const Drawable = struct {
     mesh: *const GFX.Mesh,
-    program: *const GFX.Shader,
+    texture: *const GFX.Texture,
 
-    pub fn draw(self: Drawable, entity: *Entity) void {
-        // TODO: Is this needed?
-        if (!entity.has(CT.transform)) return;
-        self.program.bind();
-        const mat = entity.getTransform().toMat();
-        //mat.gfxDump();
-        self.program.sendModel(mat);
+    pub fn draw(self: Drawable, entity: *Entity, program: GFX.Shader) void {
+        if (entity.has(CT.transform)) {
+            const mat = entity.getTransform().toMat();
+            program.sendModel(mat);
+        } else {
+            program.sendModel(Mat4.identity());
+        }
+
+        program.setTexture(0);
+        self.texture.bind(0);
         self.mesh.drawTris();
     }
 };
@@ -248,10 +257,16 @@ pub const Component = union(ComponentType) {
 
     fn update(self: C, entity: *Entity, delta: f32) void {
         switch (self) {
-            C.drawable => |c| c.draw(entity),
             C.gravity => |c| c.update(entity, delta),
             C.movable => |c| c.update(entity, delta),
             C.player => |c| c.update(entity, delta),
+            else => {},
+        }
+    }
+
+    fn draw(self: C, entity: *Entity, program: GFX.Shader) void {
+        switch (self) {
+            C.drawable => |c| c.draw(entity, program),
             else => {},
         }
     }
@@ -308,14 +323,18 @@ pub const Entity = struct {
         inline while (i < args.len) : (i += 1) {
             var component = args[i];
             var wrapped: Component = undefined;
+
             if (@typeOf(component) == C) {
                 wrapped = component;
             } else {
                 wrapped = C.wrap(component);
             }
-            if (wrapped == CT.physics) {
+
+            if (wrapped == CT.physics)
                 wrapped.physics.connect(self.id);
-            }
+            if (wrapped == CT.player)
+                wrapped.player.owner = self.id;
+
             const pos = @enumToInt(wrapped);
             self.active_components[pos] = true;
             self.components[pos] = wrapped;
@@ -374,6 +393,12 @@ pub const Entity = struct {
         if (!self.has(component)) return;
         const i = @enumToInt(component);
         self.components[i].update(self, delta);
+    }
+
+    pub fn draw(self: *Entity, component: CT, program: GFX.Shader) void {
+        if (!self.has(component)) return;
+        const i = @enumToInt(component);
+        self.components[i].draw(self, program);
     }
 };
 
@@ -468,6 +493,19 @@ pub const ECS = struct {
                 var e: *Entity = &entities[i];
                 if (!e.id.isAlive() or e.id.pos != @intCast(i32, i)) continue;
                 e.update(@intToEnum(CT, @intCast(@TagType(CT), c)), delta);
+            }
+        }
+    }
+
+    pub fn draw(self: *ECS, program: GFX.Shader) void {
+        const entities = self.entities.toSlice();
+        var c: usize = 0;
+        while (c < @memberCount(CT)) : (c += 1) {
+            var i: usize = 0;
+            while (i < self.entities.count()): (i += 1) {
+                var e: *Entity = &entities[i];
+                if (!e.id.isAlive() or e.id.pos != @intCast(i32, i)) continue;
+                e.draw(@intToEnum(CT, @intCast(@TagType(CT), c)), program);
             }
         }
     }
