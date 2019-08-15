@@ -10,6 +10,11 @@ var window_width: i32 = 800;
 var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
+const DISABLE_SPLITSCREEN = true;
+const DEBUG_CAMERA = true;
+const DEBUG_DRAW = false;
+
+
 pub const ECS = @import("entity.zig");
 
 //    - Entity System (pass 1)
@@ -17,7 +22,8 @@ pub const ECS = @import("entity.zig");
 //    - Model loading
 //      o Shading
 //      o Shadow maps :o
-//    - Split screen
+//    - Multisampling
+//    - aspect ratio
 //    - Mouse Controls (No?)
 //      - Player models
 //
@@ -37,7 +43,10 @@ fn onResize(x: i32, y: i32) void {
     glViewport(0, 0, x, y);
     window_width = x;
     window_height = y;
-    window_aspect_ratio = @intToFloat(f32, window_width) / @intToFloat(f32, window_height);
+    window_aspect_ratio =
+            @intToFloat(f32, window_width) /
+            @intToFloat(f32, window_height) /
+            switch(DISABLE_SPLITSCREEN) { false => 0.5, true => 1.0, };
     projection = Mat4.perspective(60, window_aspect_ratio);
 }
 
@@ -108,7 +117,11 @@ pub fn main() anyerror!void {
     );
 
     var post_processing_shader = try GFX.Shader.compile("res/post_process.glsl");
-    const players = [_]ECS.EntityID{ player_a, player_b };
+    const players = switch (DISABLE_SPLITSCREEN) {
+        false => [_]ECS.EntityID{ player_a, player_b },
+        true => [_]ECS.EntityID{ player_a },
+    };
+
     for (players) |player| {
         var player_comp = player.dep().getPlayer();
         player_comp.framebuffer = try GFX.Framebuffer.create(&post_processing_shader,
@@ -129,13 +142,13 @@ pub fn main() anyerror!void {
     });
 
 
-    var framebuffer_b = try GFX.Framebuffer.create(&post_processing_shader,
-                                                 @intCast(u32, window_width),
-                                                 @intCast(u32, @divTrunc(window_height, 2)));
+    var shadow_map = try GFX.Framebuffer.create(&post_processing_shader,
+                                                 @intCast(u32, 512 * 2),
+                                                 @intCast(u32, 512 * 2));
 
     _ = ecs.create(
     ECS.Transform{
-        .position = V3(-10, -8, 0),
+        .position = V3(-15, -5, 2),
         .rotation = Quat.identity(),
         .scale = 5,
     },
@@ -146,6 +159,9 @@ pub fn main() anyerror!void {
     });
 
 
+    // TODO: Something strange about light dir.
+    var light_dir = V3(0, 2, 1).normalized();
+
     var last_tick: f32 = 0;
     var delta: f32 = 0;
 
@@ -153,6 +169,7 @@ pub fn main() anyerror!void {
     var x_rot : f32= 0;
     var y_rot : f32= 0;
     while (true) {
+
         const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
         delta = tick - last_tick;
         last_tick = tick;
@@ -164,25 +181,30 @@ pub fn main() anyerror!void {
         world.update(delta);
         ecs.update(delta);
 
+        const sun_proj = Mat4.orthographic(20, 20, -20, 20);
+        const sun_view = Mat4.lookDir(light_dir, V3(-1, 0, 0));
 
+        // Draw shadow map
+        program.bind();
+        program.update();
+        program.sendSun(sun_proj, sun_view, 2);
+        program.sendCamera(sun_proj, sun_view);
+        {
+            shadow_map.bind();
+            glClearColor(1.0, 1.0, 1.0, 1.0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            program.shadowMap(true);
+            ecs.draw(program);
+            program.shadowMap(false);
 
-        var view: Mat4 = undefined;
-        const split_screen = false;
-        const debug_cam = true;
-        const debug_draw = true;
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, shadow_map.texture);
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0, 0.1, 0.1, 1.0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (debug_cam) {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0,
-                       @intCast(c_int, window_width),
-                       @intCast(c_int, window_height));
-
-            glClearColor(0.2, 0.1, 0.0, 1.0);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        if (DEBUG_CAMERA) {
             x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
             y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
             const rot = Mat4.rotation(y_rot, x_rot, 0);
@@ -192,21 +214,38 @@ pub fn main() anyerror!void {
                            4 * Input.value(0, Input.Event.MOVE_Y) * delta,
                            0);
             cam_pos = cam_pos.sub(rot.mulVec(vel).toV3());
-            view = rot.mulMat(Mat4.translation(cam_pos));
-
-            program.bind();
-            program.update();
+            const view = rot.mulMat(Mat4.translation(cam_pos));
             program.sendCamera(projection, view);
-            ecs.draw(program);
 
-            if (debug_draw) {
-                program.bind();
-                gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
-                gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
-                gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+            // Draw to screen
+            if (true) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0,
+                        @intCast(c_int, window_width),
+                        @intCast(c_int, window_height));
 
-                world.draw();
-                gfx_util.draw(program);
+                glClearColor(0.2, 0.0, 0.1, 1.0);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, shadow_map.texture);
+
+                ecs.draw(program);
+
+                if (DEBUG_DRAW) {
+                    program.bind();
+                    // gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+                    // gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+                    // gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+
+                    world.draw();
+                    gfx_util.draw(program);
+                }
+
+                glClear(GL_DEPTH_BUFFER_BIT);
+                shadow_map.render_to_screen(window_width, window_height,
+                                            V2(-1, -1),
+                                            V2(-0.5, -0.5));
             }
         } else {
             // Normal render path
@@ -215,18 +254,18 @@ pub fn main() anyerror!void {
                 var framebuffer = player_comp.framebuffer;
                 framebuffer.bind();
 
-                view = player_comp.getViewMatrix();
+                const view = player_comp.getViewMatrix();
 
                 program.bind();
                 program.update();
                 program.sendCamera(projection, view);
                 ecs.draw(program);
 
-                if (debug_draw and i == 0) {
+                if (DEBUG_DRAW and i == 0) {
                     program.bind();
-                    gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
-                    gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
-                    gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+                    // gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+                    // gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+                    // gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
 
                     world.draw();
                     gfx_util.draw(program);

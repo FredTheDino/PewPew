@@ -373,6 +373,57 @@ pub const Framebuffer = struct {
         plane.drawTris();
     }
 
+    pub fn createShadowMap(shader: *Shader, width: u32, height: u32) !Framebuffer {
+        var buffer = Framebuffer{
+            .shader = shader,
+            .width = width,
+            .height = height,
+            .fbo = 0,
+            .texture = 0,
+            .depth_buffer = 0,
+        };
+        glGenFramebuffers(1, &buffer.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, buffer.fbo);
+
+        glGenTextures(1, &buffer.texture);
+
+        glBindTexture(GL_TEXTURE_2D, buffer.texture);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                     @intCast(c_int, width), @intCast(c_int, height),
+                     0,
+                     GL_RGB,
+                     GL_UNSIGNED_BYTE,
+                     @intToPtr(*allowzero c_int, 0));
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+        glGenRenderbuffers(1, &buffer.depth_buffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, buffer.depth_buffer);
+        glRenderbufferStorage(GL_RENDERBUFFER,
+                              GL_DEPTH_COMPONENT,
+                              @intCast(c_int, width), @intCast(c_int, height));
+
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER,
+                                  GL_DEPTH_ATTACHMENT,
+                                  GL_RENDERBUFFER,
+                                  buffer.depth_buffer);
+
+        glFramebufferTexture(GL_FRAMEBUFFER,
+                             GL_COLOR_ATTACHMENT0,
+                             buffer.texture,
+                             0);
+
+        const draw_buffers: c_uint = GL_COLOR_ATTACHMENT0;
+        glDrawBuffers(1, &draw_buffers);
+
+        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            return error.FailedToCreateFramebuffer;
+
+        return buffer;
+    }
+
     pub fn create(shader: *Shader, width: u32, height: u32) !Framebuffer {
         if (needs_initialization) {
             needs_initialization = false;

@@ -208,6 +208,28 @@ pub const Mat4 = packed struct {
         return out;
     }
 
+    pub fn orthographic(width: f32, height: f32, near: f32, far: f32) Mat4 {
+        var out = identity();
+
+        out.v[0][0] = 1.0 / width;
+        out.v[1][1] = 1.0 / height;
+        // -normalization
+        out.v[2][2] = -1 / (far - near);
+        out.v[3][3] = 1;
+
+        return out;
+    }
+
+    pub fn lookDir(z: Vec3, guess_y: Vec3) Mat4 {
+        const x = guess_y.cross(z);
+        const y = z.cross(x);
+
+        return M4(x.x, x.y, x.z, 0.0,
+                  y.x, y.y, y.z, 0.0,
+                  z.x, x.y, z.z, 0.0,
+                  0.0, 0.0, 0.0, 1.0);
+    }
+
     pub fn rotation(x: real, y: real, z: real) Mat4 {
         var z_matrix = identity();
         if (z != 0) {

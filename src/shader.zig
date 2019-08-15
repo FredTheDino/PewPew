@@ -128,6 +128,24 @@ outer:
         glUniformMatrix4fv(loc_proj, 1, 1, proj_arr);
     }
 
+    /// Update the sun direction
+    pub fn sendSun(shader: Shader, proj: Mat4, rot: Mat4, shadow_slot: i32) void {
+        const loc_light_proj = glGetUniformLocation(shader.program, c"light_projection");
+        const loc_light_rot = glGetUniformLocation(shader.program, c"light_rotation");
+        const loc_shadow_map = glGetUniformLocation(shader.program, c"shadow_map");
+        const proj_arr: [*c]const f32 = @alignCast(4, &proj.v[0][0]);
+        glUniformMatrix4fv(loc_light_proj, 1, 1, proj_arr);
+        const rot_arr: [*c]const f32 = @alignCast(4, &rot.v[0][0]);
+        glUniformMatrix4fv(loc_light_rot, 1, 1, rot_arr);
+        glUniform1i(loc_shadow_map, shadow_slot);
+    }
+
+    pub fn shadowMap(shader: Shader, is_shadow_map: bool) void {
+        const loc_render_shadow_map = glGetUniformLocation(shader.program,
+                                                          c"render_shadow_map");
+        glUniform1i(loc_render_shadow_map, @boolToInt(is_shadow_map));
+    }
+
     /// Send in a color
     pub fn color(shader: Shader, c: Vec3) void {
         const loc_use_color = glGetUniformLocation(shader.program, c"use_color");
