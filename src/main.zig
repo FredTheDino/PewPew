@@ -19,13 +19,9 @@ pub const ECS = @import("entity.zig");
 
 //    - Entity System (pass 1)
 // TODO:
-//    - Model loading
-//      o Shading
-//      o Shadow maps :o
 //    - Multisampling
 //    - aspect ratio
-//    - Mouse Controls (No?)
-//      - Player models
+//    - Refactor code and make neat and easy to work with
 //
 //    - Sound thread
 //    - Asset system?
@@ -143,8 +139,8 @@ pub fn main() anyerror!void {
 
 
     var shadow_map = try GFX.Framebuffer.create(&post_processing_shader,
-                                                 @intCast(u32, 512 * 2),
-                                                 @intCast(u32, 512 * 2));
+                                                 @intCast(u32, 512 * 3),
+                                                 @intCast(u32, 512 * 3));
 
     _ = ecs.create(
     ECS.Transform{
@@ -160,7 +156,9 @@ pub fn main() anyerror!void {
 
 
     // TODO: Something strange about light dir.
-    var light_dir = V3(0, 2, 1).normalized();
+    // var light_dir = V3(0, 2, 1).normalized();
+    var light_yaw: f32 = 0.7;
+    var light_pitch: f32  = 0.4;
 
     var last_tick: f32 = 0;
     var delta: f32 = 0;
@@ -181,8 +179,8 @@ pub fn main() anyerror!void {
         world.update(delta);
         ecs.update(delta);
 
-        const sun_proj = Mat4.orthographic(20, 20, -20, 20);
-        const sun_view = Mat4.lookDir(light_dir, V3(-1, 0, 0));
+        const sun_proj = Mat4.orthographic(20, 20, -5, 5);
+        const sun_view = Mat4.rotation(light_yaw, light_pitch, 0);
 
         // Draw shadow map
         program.bind();

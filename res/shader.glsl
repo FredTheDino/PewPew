@@ -51,16 +51,19 @@ in vec3 pass_light_coord;
 
 out vec4 out_color;
 
-const vec4 shadow_tint = vec4(0.1, 0.2, 0.1, 1.0);
 
-float dept_blur(sampler2D map, vec2 uv) {
-    float delta = 0.001;
-    float d0 = texture(shadow_map, uv + vec2( 0 * delta, 0 * delta)).z;
-    float d1 = texture(shadow_map, uv + vec2( 1 * delta, 0 * delta)).z;
-    float d2 = texture(shadow_map, uv + vec2(-1 * delta, 0 * delta)).z;
-    float d3 = texture(shadow_map, uv + vec2( 0 * delta, 1 * delta)).z;
-    float d4 = texture(shadow_map, uv + vec2( 0 * delta,-1 * delta)).z;
-    return (d0 + d1 + d2 + d3 + d4) / 5.0;
+float dept_blur(sampler2D map, vec2 uv, float toLight) {
+    float bias = 0.010;
+    float delta = 1.0 / (512.0 * 3);
+    float sum = 0.0;
+    const int kernel_n = 3;
+    for (int x = -kernel_n; x < kernel_n; x++) {
+        for (int y = -kernel_n; y < kernel_n; y++) {
+            float toShadow = texture(map, uv + vec2(x * delta, y * delta)).z;
+            sum += step(toLight, toShadow + bias);
+        }
+    }
+    return sum / pow(kernel_n * 2 + 1, 2);
 }
 
 void main()
@@ -75,18 +78,17 @@ void main()
         return;
     }
 
+    vec4 shadow_tint = vec4(0.02, 0.01, 0.10 * (sin(time / 8) * 0.5 + 0.5), 1.0);
+    vec4 light_tint = vec4(1.2 * (sin(time / 8) * 0.5 + 0.5), 1.1, 1.0, 1.0);
     vec3 light_dir = vec3(light_rotation[0][2], 
                           light_rotation[1][2],
                           light_rotation[2][2]);
-    float lightness = max(dot(normalize(pass_normal), light_dir), 0.0);
+    float light = max(dot(normalize(pass_normal), light_dir), 0.0);
+    float shadow = dept_blur(shadow_map, pass_light_coord.xy, pass_light_coord.z); 
+    float lightness = min(light, shadow);
 
-    vec4 color = texture(color_texture, pass_uv) * lightness; 
-    float d = pass_light_coord.z - dept_blur(shadow_map, pass_light_coord.xy);
-    float in_light = 0.0;
-    if (d <= 0.004)
-        out_color = color * lightness;
-    else
-        out_color = color * shadow_tint;;
+    vec4 texture_color = texture(color_texture, pass_uv);
+    out_color = texture_color * mix(shadow_tint, light_tint, lightness);
     
 }
 
