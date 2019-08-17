@@ -10,8 +10,8 @@ var window_width: i32 = 1600;
 var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
-const DEBUG_CAMERA = true;
-const DISABLE_SPLITSCREEN = true or DEBUG_CAMERA;
+const DEBUG_CAMERA = false;
+const DISABLE_SPLITSCREEN = false or DEBUG_CAMERA;
 const DEBUG_DRAW = true;
 
 
@@ -20,11 +20,15 @@ pub const ECS = @import("entity.zig");
 //    - Entity System (pass 1)
 // TODO:
 //    - Multisampling
-//    - aspect ratio
-//    - Refactor code and make neat and easy to work with
+//    - Hit effects
+//    - Better knockback
+//    - Better movement
+//    - More interesting levels, perhaps some clever procedural generation? :o
+//    - Respawning
+//    - Guns?
 //
 //    - Sound thread
-//    - Asset system?
+//    - Asset system? Don't think I will need it...
 //
 // Maybes:
 //    - Hot reloading of assets?
@@ -244,6 +248,7 @@ pub fn main() anyerror!void {
             debugCamera(delta);
         } else {
             for (players) |player_id, i| {
+                if (!player_id.isValid()) continue;
                 var player_comp = player_id.dep().getPlayer();
                 var framebuffer = player_comp.framebuffer;
                 framebuffer.bind();

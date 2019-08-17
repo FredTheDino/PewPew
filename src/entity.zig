@@ -410,6 +410,13 @@ pub const EntityID = struct {
         return self.pos >= 0;
     }
 
+    pub fn isValid(self: EntityID) bool {
+        if (self.de()) |d| {
+            return true;
+        }
+        return false;
+    }
+
     pub fn de(self: EntityID) ?*Entity {
         var e: *Entity = &global_ecs.entities.toSlice()[@intCast(usize, self.pos)];
         if (e.id.gen != self.gen or e.id.pos != self.pos) return null;
