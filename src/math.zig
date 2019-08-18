@@ -1,10 +1,25 @@
 // TODO: Make this into SIMD instructions.
+use @cImport({
+    @cInclude("stdlib.h");
+});
 const assert = @import("std").debug.assert;
 
 pub const real = f32;
 pub const accuracy = 0.0001;
 
 pub const math = @import("std").math;
+
+pub fn randV2() Vec2 {
+    return V2(randReal(), randReal());
+}
+
+pub fn randReal() f32 {
+    return (randPosReal() - 0.5) * 2.0;
+}
+
+pub fn randPosReal() f32 {
+    return (@intToFloat(f32, @mod(rand(), 255)) / 255.0);
+}
 
 pub fn sign(v: var) @typeOf(v) {
     if (v < 0)
@@ -109,6 +124,10 @@ pub const Quat = struct {
             .v = a.v.cross(b.v).add(b.v.scale(a.w)).add(a.v.scale(b.w)),
             .w = a.w * b.w - a.v.dot(b.v),
         };
+    }
+
+    pub fn mulVec(a: Quat, b: Vec3) Vec3 {
+        return a.mul(H(b.x, b.y, b.z, 0.0)).mul(a.neg()).v;
     }
 
     pub fn scale(a: Quat, b: real) Quat {
@@ -425,7 +444,7 @@ pub const Vec2 = packed struct {
         };
     }
 
-    pub fn mul(self: Vec2, other: Vec2) Vec2 {
+    pub fn hadamard(self: Vec2, other: Vec2) Vec2 {
         return Vec2 {
             .x = self.x * other.x,
             .y = self.y * other.y,

@@ -12,6 +12,7 @@ pub const Event = enum {
 
     JUMP,
     SHOOT,
+    RELOAD,
     DEBUG,
 };
 
@@ -176,6 +177,7 @@ const KeyEvent = struct {
         // TODO: Support directional buttons???
         const event = switch (b) {
             SDL_CONTROLLER_BUTTON_A => Event.JUMP,
+            SDL_CONTROLLER_BUTTON_B => Event.RELOAD,
             SDL_CONTROLLER_BUTTON_RIGHTSHOULDER => Event.SHOOT,
             else => Event.NO_INPUT_EVENT,
         };

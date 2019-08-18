@@ -26,6 +26,7 @@ pub const ECS = @import("entity.zig");
 //    - More interesting levels, perhaps some clever procedural generation? :o
 //    - Respawning
 //    - Guns?
+//    - Input activation
 //
 //    - Sound thread
 //    - Asset system? Don't think I will need it...
@@ -94,19 +95,35 @@ fn create_world() void {
         .texture = &texture,
     });
 
+    _ = ecs.create(
+    ECS.Transform{
+        .position = V3(-4, -4, 0),
+        .rotation = AA(V3(0, 1, 0), -math.pi / 2.0),
+        .scale = 1,
+    },
+    ECS.SpawnPoint.create());
+
+    _ = ecs.create(
+    ECS.Transform{
+        .position = V3(4, -4, 0),
+        .rotation = AA(V3(0, 1, 0), math.pi / 2.0),
+        .scale = 1,
+    },
+    ECS.SpawnPoint.create());
+
 }
 
-fn spawn_players(player_a_pos: Vec3, player_b_pos: Vec3) ![switch(DISABLE_SPLITSCREEN) { true => 1, false => 2, }]ECS.EntityID {
+fn spawn_players() ![switch(DISABLE_SPLITSCREEN) { true => 1, false => 2, }]ECS.EntityID {
     const collision_dim = V3(0.5, 3, 0.5);
     var player_a = ecs.create(
     ECS.Transform{
-        .position = player_a_pos,
+        .position = V3(0, 0, 0),
         .rotation = Quat.identity(),
         .scale = 1,
     },
     ECS.Movable.still(),
     ECS.Physics.create(collision_dim, true),
-    ECS.Player.create(0),
+    ECS.Player.create(0, 0),
     ECS.Drawable{
         .texture = &texture,
         .mesh = &cone,
@@ -115,13 +132,13 @@ fn spawn_players(player_a_pos: Vec3, player_b_pos: Vec3) ![switch(DISABLE_SPLITS
 
     var player_b = ecs.create(
     ECS.Transform{
-        .position = player_b_pos,
+        .position = V3(0, 0, 0),
         .rotation = Quat.identity(),
         .scale = 1,
     },
     ECS.Movable.still(),
     ECS.Physics.create(collision_dim, true),
-    ECS.Player.create(1),
+    ECS.Player.create(1, 1),
     ECS.Drawable{
         .texture = &texture,
         .mesh = &cone,
@@ -199,7 +216,7 @@ pub fn main() anyerror!void {
                                                  @intCast(u32, 512 * 3),
                                                  @intCast(u32, 512 * 3));
 
-    const players = try spawn_players(V3(0, 0, 0), V3(2, 0, 0));
+    const players = try spawn_players();
     create_world();
 
     var light_yaw: f32 = 0.7;

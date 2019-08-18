@@ -14,6 +14,8 @@ const Phy = @import("collision.zig");
 const GFX = @import("graphics.zig");
 const List = @import("std").ArrayList;
 
+const CRIT_SCALE = 1.5;
+
 pub const Transform = struct {
     position: Vec3,
     rotation: Quat,
@@ -81,34 +83,142 @@ pub const Physics = struct {
     }
 };
 
+pub const Weapon = struct {
+    next_firetime: f32,
+    shoot_spacing: f32,
+    damage: f32,
+
+    auto_fire: bool,
+
+    recoil: Vec2,
+    recoil_offset: Vec2,
+    spread: Vec2,
+
+    reload_time: f32,
+    clip_size: u32,
+    clip: u32,
+
+    pub fn create(id: usize) Weapon {
+        return switch(id) {
+            // AK-like
+            0 => Weapon{
+                .next_firetime = 0,
+                .clip = 0,
+
+                .shoot_spacing = 0.1,
+                .damage = 0.8,
+
+                .auto_fire = true,
+
+                .recoil = V2(0.30, 0.20),
+                .recoil_offset = V2(0.06, 0.08),
+                .spread = V2(0.08, 0.05),
+
+                .reload_time = 2.0,
+                .clip_size = 16,
+            },
+            // Pistol
+            1 => Weapon{
+                .next_firetime = 0,
+                .clip = 0,
+
+                .shoot_spacing = 0.1,
+                .damage = 1.0,
+
+                .auto_fire = false,
+
+                .recoil = V2(0.07, 0.01),
+                .recoil_offset = V2(0.01, 0.5),
+                .spread = V2(0.01, 0.01),
+
+                .reload_time = 1.3,
+                .clip_size = 6,
+            },
+            else => unreachable,
+        };
+    }
+
+    pub fn canShoot(self: Weapon, player: PlayerId, tick: f32) bool {
+        if (tick > self.next_firetime and self.clip > 0) {
+            return switch(self.auto_fire) {
+                false => Input.pressed(player, Input.Event.SHOOT),
+                true  => Input.down(player, Input.Event.SHOOT),
+            };
+        }
+        return false;
+    }
+
+    pub fn reload(self: *Weapon, tick: f32) void {
+        self.clip = self.clip_size;
+        self.next_firetime = tick + self.reload_time;
+    }
+
+    /// Fires a bullet and gives out the recoil
+    pub fn shoot(self: *Weapon, shooter: Player, body: Phy.BodyID, tick: f32) Vec2 {
+        self.clip -= 1;
+        self.next_firetime = tick + self.shoot_spacing;
+        const spread = randV2().hadamard(self.spread);
+        const view = Mat4.rotation(shooter.pitch, shooter.yaw, 0);
+        const dir = view.mulVec(V4(spread.x, spread.y, -1, 0))
+                                .toV3().normalized();
+        const p = shooter.owner.dep().getTransform().position.add(V3(0, shooter.height, 0));
+        var hit = Phy.global_world.raycast_ignore(p,
+                                                  dir,
+                                                  body);
+        if (hit.isHit()) {
+            // TODO: Cool hit effect
+            hit.gfxDump();
+            var hit_body = hit.body.dep();
+            if (hit_body.entity) |other_id| {
+                var hit_entity = other_id.dep();
+                if (hit_entity.has(CT.player)) {
+                    hit_entity.getPlayer().hitByBullet(hit_entity,
+                                                       hit,
+                                                       self.damage);
+                }
+            }
+        }
+        return randV2().hadamard(self.recoil).add(self.recoil_offset);
+    }
+};
+
 pub const Player = struct {
+    const PlayerList = List(EntityID);
+    pub var players = PlayerList.init(A);
+
     // Camera
     yaw: f32,
     pitch: f32,
-    health: u32,
+    knockback: Vec2,
+    health: f32,
+
+    weapon: Weapon,
 
     height: f32,
     movement_speed: f32,
     look_speed: f32,
     jump_speed: f32,
-    spread: f32,
     gravity: f32,
+
+    const MAX_HEALTH: f32 = 3.0;
 
     owner: EntityID,
     id: Input.PlayerId,
     framebuffer: GFX.Framebuffer,
 
-    pub fn create(id: PlayerId) Player {
+    pub fn create(id: PlayerId, weapon_id: usize) Player {
         return Player{
             .yaw = 0,
             .pitch = 0,
-            .health = 10,
+            .knockback = V2(0, 0),
+            .health = 0,
+
+            .weapon = Weapon.create(weapon_id),
 
             .height = 1.5,
             .movement_speed = 10.0,
             .look_speed = 3.0,
             .jump_speed = 8.0,
-            .spread = 0.2,
             .gravity = -10.0,
 
             .id = id,
@@ -117,13 +227,46 @@ pub const Player = struct {
         };
     }
 
+    pub fn connect(self: *Player, owner: EntityID) void {
+        self.owner = owner;
+        players.append(owner) catch unreachable;
+    }
+
+    pub fn remove(owner: EntityID) void {
+        for (players.toSlice()) |id, i| {
+            if (!owner.equals(id))
+                continue;
+            _ = spawn_points.swapRemove(i);
+        }
+    }
+
+    pub fn findOther(other: EntityID) EntityID {
+        assert(players.len > 1);
+        for (players.toSlice()) |id| {
+            if (!other.equals(id))
+                return id;
+        }
+        assert(false);
+        unreachable;
+    }
+
     pub fn update(self: Player, entity: *Entity, delta: f32) void {
-        // TODO: Agressive, it crashes if it doesn't exist, is this smart?
-        const movable: *Movable = entity.getMoveable();
-        // NOTE: Position for feet!
         const transform: *Transform = entity.getTransform();
         const player: *Player = entity.getPlayer();
-        // TODO: Acceleration
+        const movable: *Movable = entity.getMoveable();
+
+        if (player.health == 0 or transform.position.y < -20) {
+            player.knockback = V2(0, 0);
+            player.health = MAX_HEALTH;
+
+            movable.linear = V3(0, 0, 0);
+
+            const other_player = findOther(player.owner);
+            transform.* = SpawnPoint.findSpawnPointFarFrom(other_player.dep().getTransform().position);
+            const rotated_vector = transform.rotation.mulVec(V3(0, 0, 1));
+            player.yaw = math.atan2(real, rotated_vector.x, rotated_vector.y);
+            player.pitch = 0;
+        }
 
         var movement: Vec4 = V4(
                 Input.value(player.id, Input.Event.MOVE_X) * delta,
@@ -141,8 +284,11 @@ pub const Player = struct {
         movable.linear = movable.linear.scale(damping);
         movable.linear.y = y_vel;
 
-        player.yaw -= Input.value(player.id, Input.Event.LOOK_X) * self.look_speed * delta;
-        player.pitch += Input.value(player.id, Input.Event.LOOK_Y) * self.look_speed * delta;
+        player.yaw -= Input.value(player.id, Input.Event.LOOK_X) *
+                        self.look_speed * delta - player.knockback.y * delta;
+        player.pitch += Input.value(player.id, Input.Event.LOOK_Y) *
+                        self.look_speed * delta - player.knockback.x * delta;
+        player.knockback = player.knockback.scale(math.pow(real, 0.0001, delta));
 
         const physics = entity.getPhysics();
         const body: *Phy.Body = physics.body.dep();
@@ -153,45 +299,32 @@ pub const Player = struct {
         } else {
             movable.linear.y += self.gravity * delta;
         }
+
+        const tick = @intToFloat(f32, SDL_GetTicks()) / 1000.0;
         // TODO: Clip and shooting spacing.
-        if (Input.pressed(player.id, Input.Event.SHOOT)) {
+        if (Input.pressed(player.id, Input.Event.RELOAD)) {
+            player.weapon.reload(tick);
+        }
+        if ( player.weapon.canShoot(player.id, tick)) {
             // TODO: Better random
-            const spread_x = @intToFloat(f32, @mod(rand(), 255)) / 255.0 - 0.5;
-            const spread_y = @intToFloat(f32, @mod(rand(), 255)) / 255.0 - 0.5;
-            const view = Mat4.rotation(self.pitch, self.yaw, 0);
-            const dir = view.mulVec(V4(spread_x * self.spread,
-                                       spread_y * self.spread,
-                                       -1,
-                                       0)).toV3()
-                                          .normalized();
-            const offset = V3(0, self.height, 0);
-            const p = entity.getTransform().position.add(offset);
-            var hit = Phy.global_world.raycast_ignore(
-                p,
-                dir,
-                entity.getPhysics().body);
-            if (hit.isHit()) {
-                // TODO: Cool hit effect
-                hit.gfxDump();
-                var other_body = hit.body.dep();
-                if (other_body.entity) |other_id| {
-                    var other_entity = other_id.dep();
-                    if (other_entity.has(CT.player)) {
-                        other_entity.getPlayer().hitByBullet(other_entity, hit);
-                    }
-                }
-            }
+            player.knockback = player.knockback.add(player.weapon.shoot(player.*, body.id, tick));
         }
     }
 
-    fn hitByBullet(self: *Player, entity: *Entity, hit: Phy.RayHit) void {
-        var movable = entity.getMoveable();
-        movable.linear = movable.linear.add(hit.normal.scale(-2));
-
-        self.health -= 1;
-        if (self.health == 0) {
-            global_ecs.remove(entity.id);
-        }
+    fn hitByBullet(self: *Player, entity: *Entity, hit: Phy.RayHit, damage: f32) void {
+        const position = entity.getTransform().position;
+        const distance = hit.position.sub(position);
+        const movable = entity.getMoveable();
+        movable.linear = movable.linear.add(distance
+                                            .normalized()
+                                            .scale(-2)
+                                            .hadamard(V3(1, 0, 1)));
+        if (self.health == 0) return;
+        self.health -= switch(distance.y > (self.height - 0.5)) {
+            false => damage,
+            true => damage * CRIT_SCALE,
+        };
+        self.health = math.max(0, self.health);
     }
 
     pub fn getViewMatrix(self: Player) Mat4 {
@@ -222,12 +355,45 @@ pub const Drawable = struct {
     }
 };
 
-pub const Gravity = struct {
-    acceleration: f32,
+pub const SpawnPoint = struct {
+    const EntityIDList = List(EntityID);
+    pub var spawn_points = EntityIDList .init(A);
 
-    pub fn update(self: Gravity, entity: *Entity, delta: f32) void {
-        // TODO: Remove this.
-        unreachable;
+    dummy: i1,
+
+    pub fn create() SpawnPoint {
+        return SpawnPoint{
+            .dummy = 0,
+        };
+    }
+
+    pub fn findSpawnPointFarFrom(p: Vec3) Transform {
+        assert(spawn_points.len != 0);
+        var spawn_transform = Transform.at(p);
+        var distance: f32 = 0;
+        for (spawn_points.toSlice()) |id| {
+            assert(id.dep().has(CT.transform));
+            const t = id.dep().getTransform().*;
+            const sp = t.position;
+            const d = sp.sub(p).lengthSq();
+            if (distance < d) {
+                spawn_transform = t;
+                distance = d;
+            }
+        }
+        return spawn_transform;
+    }
+
+    pub fn connect(self: *SpawnPoint, owner: EntityID) !void {
+        try spawn_points.append(owner);
+    }
+
+    pub fn remove(owner: EntityID) void {
+        for (spawn_points.toSlice()) |id, i| {
+            if (!owner.equals(id))
+                continue;
+            _ = spawn_points.swapRemove(i);
+        }
     }
 };
 
@@ -239,8 +405,8 @@ pub const ComponentType = enum {
     physics,
     player,
     transform,
-    gravity,
     movable,
+    spawn_point,
 
     drawable,
 };
@@ -250,14 +416,13 @@ pub const Component = union(ComponentType) {
     physics: Physics,
     player: Player,
     transform: Transform,
-    gravity: Gravity,
     movable: Movable,
+    spawn_point: SpawnPoint,
 
     drawable: Drawable,
 
     fn update(self: C, entity: *Entity, delta: f32) void {
         switch (self) {
-            C.gravity => |c| c.update(entity, delta),
             C.movable => |c| c.update(entity, delta),
             C.player => |c| c.update(entity, delta),
             else => {},
@@ -279,9 +444,6 @@ pub const Component = union(ComponentType) {
             Transform => C{
                 .transform = component,
             },
-            Gravity => C{
-                .gravity = component,
-            },
             Movable => C{
                 .movable = component,
             },
@@ -290,6 +452,9 @@ pub const Component = union(ComponentType) {
             },
             Physics => C{
                 .physics = component,
+            },
+            SpawnPoint => C{
+                .spawn_point = component,
             },
             else => {
                 std.debug.warn("FOREGOT TO ADD TO WRAP\n");
@@ -332,8 +497,10 @@ pub const Entity = struct {
 
             if (wrapped == CT.physics)
                 wrapped.physics.connect(self.id);
+            if (wrapped == CT.spawn_point)
+                wrapped.spawn_point.connect(self.id) catch unreachable;
             if (wrapped == CT.player)
-                wrapped.player.owner = self.id;
+                wrapped.player.connect(self.id);
 
             const pos = @enumToInt(wrapped);
             self.active_components[pos] = true;
@@ -343,9 +510,12 @@ pub const Entity = struct {
 
     pub fn remove(self: *Entity, args: ...) void {
         comptime var i = 0;
-        if (self.has(CT.physics)) {
+        if (self.has(CT.physics))
             Phy.global_world.remove(self.getPhysics().body);
-        }
+        if (self.has(CT.spawn_point))
+            SpawnPoint.remove(self.id);
+        if (self.has(CT.player))
+            Player.remove(self.id);
         inline while (i < args.len) : (i += 1) {
             self.active_components[@enumToInt(args[i])] = false;
         }
@@ -373,10 +543,6 @@ pub const Entity = struct {
         return &(self.get(CT.drawable) orelse unreachable).drawable;
     }
 
-    pub fn getGravity(self: *Entity) *Gravity {
-        return &(self.get(CT.gravity) orelse unreachable).gravity;
-    }
-
     pub fn getMoveable(self: *Entity) *Movable {
         return &(self.get(CT.movable) orelse unreachable).movable;
     }
@@ -387,6 +553,10 @@ pub const Entity = struct {
 
     pub fn getPhysics(self: *Entity) *Physics {
         return &(self.get(CT.physics) orelse unreachable).physics;
+    }
+
+    pub fn getSpawnPoint(self: *Entity) *SpawnPoint {
+        return &(self.get(CT.spawn_point) orelse unreachable).spawn_point;
     }
 
     pub fn update(self: *Entity, component: CT, delta: f32) void {
@@ -426,6 +596,10 @@ pub const EntityID = struct {
     // Better name?
     pub fn dep(self: EntityID) *Entity {
         return self.de() orelse unreachable;
+    }
+
+    pub fn equals(self: EntityID, other: EntityID) bool {
+        return self.pos == other.pos and self.gen == other.gen;
     }
 };
 
