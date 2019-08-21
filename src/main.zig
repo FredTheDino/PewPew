@@ -2,9 +2,11 @@ use @import("import.zig");
 
 use @import("math.zig");
 const Phy = @import("collision.zig");
-const GFX = @import("graphics.zig");
+pub const GFX = @import("graphics.zig");
 const Input = @import("input.zig");
+pub const ECS = @import("entity.zig");
 const loadMesh = @import("obj_loader.zig").loadMesh;
+const LevelGen = @import("level.zig").LevelGen;
 
 var window_width: i32 = 1600;
 var window_height: i32 = 800;
@@ -12,20 +14,24 @@ var window_aspect_ratio: f32 = undefined;
 
 const DEBUG_CAMERA = false;
 const DISABLE_SPLITSCREEN = false or DEBUG_CAMERA;
-const DEBUG_DRAW = true;
-
-
-pub const ECS = @import("entity.zig");
+const DEBUG_DRAW = false;
 
 //    - Entity System (pass 1)
 // TODO:
-//    - Multisampling
+//    - Multi sampling
 //    - Hit effects
-//    - Better knockback
+//       - Particles
+//       - Sound effects
 //    - Better movement
-//    - More interesting levels, perhaps some clever procedural generation? :o
-//    - Respawning
-//    - Guns?
+//       - Tweak jump
+//       - Double jump?
+//       - Dash/Dodge?
+//    - Level generation
+//       - Moving obstacles
+//       - Interconnection, generate a graph and use that?
+//          - Will it be interesting?
+//       - Verticality?
+//          - Movement options for this?
 //    - Input activation
 //
 //    - Sound thread
@@ -70,47 +76,13 @@ fn onResize(x: i32, y: i32) void {
     projection = Mat4.perspective(60, window_aspect_ratio);
 }
 
-fn create_world() void {
-    _ = ecs.create(
-    ECS.Transform{
-        .position = V3(0, -10, 0),
-        .rotation = Quat.identity(),
-        .scale = 5,
-    },
-    ECS.Physics.create(V3(10, 10, 10), false),
-    ECS.Drawable{
-        .mesh = &cube,
-        .texture = &texture,
-    });
-
-    _ = ecs.create(
-    ECS.Transform{
-        .position = V3(-15, -5, 2),
-        .rotation = Quat.identity(),
-        .scale = 5,
-    },
-    ECS.Physics.create(V3(10, 10, 10), false),
-    ECS.Drawable{
-        .mesh = &cube,
-        .texture = &texture,
-    });
-
-    _ = ecs.create(
-    ECS.Transform{
-        .position = V3(-4, -4, 0),
-        .rotation = AA(V3(0, 1, 0), -math.pi / 2.0),
-        .scale = 1,
-    },
-    ECS.SpawnPoint.create());
-
-    _ = ecs.create(
-    ECS.Transform{
-        .position = V3(4, -4, 0),
-        .rotation = AA(V3(0, 1, 0), math.pi / 2.0),
-        .scale = 1,
-    },
-    ECS.SpawnPoint.create());
-
+fn create_world() !void {
+    var level = try LevelGen.create(20, 0.2);
+    var q: i32 = 0;
+    while (q < 500): (q += 1) {
+        level.step();
+    }
+    level.generate(ecs, ECS.Drawable{ .mesh = &cube, .texture = &texture, });
 }
 
 fn spawn_players() ![switch(DISABLE_SPLITSCREEN) { true => 1, false => 2, }]ECS.EntityID {
@@ -216,14 +188,23 @@ pub fn main() anyerror!void {
                                                  @intCast(u32, 512 * 3),
                                                  @intCast(u32, 512 * 3));
 
+    _ = ecs.create(
+    ECS.Transform{
+        .position = V3(0, 0, 0),
+        .rotation = Quat.identity(),
+        .scale = 1,
+    },
+    ECS.SpawnPoint.create());
+
     const players = try spawn_players();
-    create_world();
+    try create_world();
 
     var light_yaw: f32 = 0.7;
     var light_pitch: f32  = 0.4;
 
     var last_tick: f32 = 0;
     var delta: f32 = 0;
+
 
     while (true) {
 
@@ -288,9 +269,9 @@ pub fn main() anyerror!void {
     }
 }
 
-var cam_pos : Vec3 = V3(0, 0, 0);
-var x_rot : f32= 0;
-var y_rot : f32= 0;
+var cam_pos : Vec3 = V3(-8, 0, 0);
+var x_rot : f32 = math.pi / 2.0;
+var y_rot : f32 = 0;
 fn debugCamera(delta: f32) void {
     x_rot -= 2 * Input.value(0, Input.Event.LOOK_X) * delta;
     y_rot += 2 * Input.value(0, Input.Event.LOOK_Y) * delta;
@@ -317,6 +298,8 @@ fn debugCamera(delta: f32) void {
     glBindTexture(GL_TEXTURE_2D, shadow_map.texture);
 
     ecs.draw(program);
+
+
     debugDraw();
 
     // Render shadow map onto in lower left corner

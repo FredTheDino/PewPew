@@ -357,7 +357,7 @@ pub const Drawable = struct {
 
 pub const SpawnPoint = struct {
     const EntityIDList = List(EntityID);
-    pub var spawn_points = EntityIDList .init(A);
+    pub var spawn_points = EntityIDList.init(A);
 
     dummy: i1,
 
@@ -603,7 +603,7 @@ pub const EntityID = struct {
     }
 };
 
-var global_ecs: ECS = undefined;
+pub var global_ecs: ECS = undefined;
 
 pub const ECS = struct {
     // List of entities

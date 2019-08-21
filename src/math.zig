@@ -21,6 +21,10 @@ pub fn randPosReal() f32 {
     return (@intToFloat(f32, @mod(rand(), 255)) / 255.0);
 }
 
+pub fn randPosInt() u32 {
+    return @bitCast(u32, rand() & 0xFFFFFFF);
+}
+
 pub fn sign(v: var) @typeOf(v) {
     if (v < 0)
         return -1;
