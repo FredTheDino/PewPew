@@ -12,9 +12,9 @@ var window_width: i32 = 1600;
 var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
-const DEBUG_CAMERA = true;
+const DEBUG_CAMERA = false;
 const DISABLE_SPLITSCREEN = false or DEBUG_CAMERA;
-const DEBUG_DRAW = false;
+const DEBUG_DRAW = true;
 
 //    - Entity System (pass 1)
 // TODO:
@@ -107,7 +107,7 @@ fn spawn_players() ![switch(DISABLE_SPLITSCREEN) { true => 1, false => 2, }]ECS.
     },
     ECS.Movable.still(),
     ECS.Physics.create(collision_dim, true),
-    ECS.Player.create(1, 1),
+    ECS.Player.create(1, 0),
     ECS.Drawable{
         .texture = &texture,
         .mesh = &cone,
@@ -155,11 +155,11 @@ fn initalize_open_gl() *SDL_Window {
 fn debugDraw() void {
     if (!DEBUG_DRAW) return;
     program.bind();
-    gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
-    gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
-    gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
+    // gfx_util.line(V3(0, 0, 0), V3(0.5, 0, 0), V3(0.5, 0, 0));
+    // gfx_util.line(V3(0, 0, 0), V3(0, 0.5, 0), V3(0, 0.5, 0));
+    // gfx_util.line(V3(0, 0, 0), V3(0, 0, 0.5), V3(0, 0, 0.5));
 
-    world.draw();
+    // world.draw();
     gfx_util.draw(program);
 }
 
@@ -179,11 +179,9 @@ pub fn main() anyerror!void {
     cube = try loadMesh("res/cube.obj");
     cone = try loadMesh("res/player.obj");
 
-    texture = try GFX.Texture.load("res/test.png");
+    texture = try GFX.Texture.load("res/box.png");
 
-    shadow_map = try GFX.Framebuffer.create(&post_program,
-                                                 @intCast(u32, 512 * 1),
-                                                 @intCast(u32, 512 * 1));
+    shadow_map = try GFX.Framebuffer.create(&post_program, 512, 512);
 
     _ = ecs.create(
     ECS.Transform{

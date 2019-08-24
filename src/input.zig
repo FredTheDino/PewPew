@@ -119,8 +119,7 @@ pub fn update() void {
                 const button = event.cbutton.button;
                 const which = event.cbutton.which;
                 const is_down = event.cbutton.state == SDL_PRESSED;
-                if (button == SDL_CONTROLLER_BUTTON_A)
-                    KeyEvent.addController(which);
+                KeyEvent.addController(which);
                 const key_evet = KeyEvent.button(which, button, is_down);
                 process(key_evet);
             },

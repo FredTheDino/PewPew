@@ -105,17 +105,17 @@ pub const Weapon = struct {
                 .next_firetime = 0,
                 .clip = 0,
 
-                .shoot_spacing = 0.1,
-                .damage = 0.8,
+                .shoot_spacing = 0.07,
+                .damage = 0.4,
 
                 .auto_fire = true,
 
-                .recoil = V2(0.30, 0.20),
-                .recoil_offset = V2(0.06, 0.08),
-                .spread = V2(0.08, 0.05),
+                .recoil = V2(0.36, 0.41),
+                .recoil_offset = V2(0.06, 0.86),
+                .spread = V2(0.03, 0.03),
 
-                .reload_time = 2.0,
-                .clip_size = 16,
+                .reload_time = 1.0,
+                .clip_size = 20,
             },
             // Pistol
             1 => Weapon{
@@ -123,12 +123,12 @@ pub const Weapon = struct {
                 .clip = 0,
 
                 .shoot_spacing = 0.1,
-                .damage = 1.0,
+                .damage = 2.0,
 
                 .auto_fire = false,
 
-                .recoil = V2(0.07, 0.01),
-                .recoil_offset = V2(0.01, 0.5),
+                .recoil = V2(0.45, 0.11),
+                .recoil_offset = V2(4.0, 0.01),
                 .spread = V2(0.01, 0.01),
 
                 .reload_time = 1.3,
@@ -138,14 +138,15 @@ pub const Weapon = struct {
         };
     }
 
-    pub fn canShoot(self: Weapon, player: PlayerId, tick: f32) bool {
-        if (tick > self.next_firetime and self.clip > 0) {
-            return switch(self.auto_fire) {
-                false => Input.pressed(player, Input.Event.SHOOT),
-                true  => Input.down(player, Input.Event.SHOOT),
-            };
-        }
-        return false;
+    pub fn canShoot(self: Weapon, tick: f32) bool {
+        return tick > self.next_firetime and self.clip > 0;
+    }
+
+    pub fn pressedShoot(self: Weapon, player: PlayerId) bool {
+        return switch(self.auto_fire) {
+            false => Input.pressed(player, Input.Event.SHOOT),
+            true  => Input.down(player, Input.Event.SHOOT),
+        };
     }
 
     pub fn reload(self: *Weapon, tick: f32) void {
@@ -219,7 +220,7 @@ pub const Player = struct {
             .movement_speed = 10.0,
             .look_speed = 3.0,
             .jump_speed = 8.0,
-            .gravity = -10.0,
+            .gravity = -18.0,
 
             .id = id,
             .owner = undefined,
@@ -305,9 +306,16 @@ pub const Player = struct {
         if (Input.pressed(player.id, Input.Event.RELOAD)) {
             player.weapon.reload(tick);
         }
-        if ( player.weapon.canShoot(player.id, tick)) {
-            // TODO: Better random
-            player.knockback = player.knockback.add(player.weapon.shoot(player.*, body.id, tick));
+
+        if ( player.weapon.canShoot(tick)) {
+            const view = Mat4.rotation(player.pitch, player.yaw, 0);
+            const p = entity.getTransform().position.add(V3(0, player.height, 0));
+            GFX.DebugDraw.gfx_util.point(p.add(view.mulVec(V4(0, 0, -1, 0)).toV3()), V3(1, 1, 1));
+            if (player.weapon.pressedShoot(player.id)) {
+
+                // TODO: Better random
+                player.knockback = player.knockback.add(player.weapon.shoot(player.*, body.id, tick));
+            }
         }
     }
 
@@ -389,8 +397,6 @@ pub const SpawnPoint = struct {
     }
 
     pub fn draw(self: SpawnPoint, owner: *Entity) void {
-        const t = owner.getTransform();
-        Mat4.translation(t.position).mulMat(t.rotation.toMat()).gfxDump();
     }
 
 
