@@ -13,8 +13,8 @@ var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
 const DEBUG_CAMERA = false;
-const DISABLE_SPLITSCREEN = false or DEBUG_CAMERA;
-const DEBUG_DRAW = false;
+const DISABLE_SPLITSCREEN = true or DEBUG_CAMERA;
+const DEBUG_DRAW = true;
 
 //    - Entity System (pass 1)
 // TODO:
@@ -76,13 +76,10 @@ fn onResize(x: i32, y: i32) void {
     projection = Mat4.perspective(60, window_aspect_ratio);
 }
 
-fn create_world() !void {
-    var level = try LevelGen.create(20, 0.2);
-    var q: i32 = 0;
-    while (q < 500): (q += 1) {
-        level.step();
-    }
-    level.generate(ecs, ECS.Drawable{ .mesh = &cube, .texture = &texture, });
+fn create_world() void {
+    LevelGen.generate(15,
+                      ecs,
+                      ECS.Drawable{ .mesh = &cube, .texture = &texture, });
 }
 
 fn spawn_players() ![switch(DISABLE_SPLITSCREEN) { true => 1, false => 2, }]ECS.EntityID {
@@ -185,8 +182,8 @@ pub fn main() anyerror!void {
     texture = try GFX.Texture.load("res/test.png");
 
     shadow_map = try GFX.Framebuffer.create(&post_program,
-                                                 @intCast(u32, 512 * 3),
-                                                 @intCast(u32, 512 * 3));
+                                                 @intCast(u32, 512 * 1),
+                                                 @intCast(u32, 512 * 1));
 
     _ = ecs.create(
     ECS.Transform{
@@ -197,7 +194,7 @@ pub fn main() anyerror!void {
     ECS.SpawnPoint.create());
 
     const players = try spawn_players();
-    try create_world();
+    create_world();
 
     var light_yaw: f32 = 0.7;
     var light_pitch: f32  = 0.4;
@@ -260,9 +257,14 @@ pub fn main() anyerror!void {
 
                 debugDraw();
 
-                const min = V2(-1 + @intToFloat(f32, i), -1);
-                const max = V2(0+ @intToFloat(f32, i), 1 );
-                framebuffer.render_to_screen(window_width, window_height, min, max);
+                if (DISABLE_SPLITSCREEN) {
+                    framebuffer.render_to_screen(window_width, window_height, V2(-1, -1), V2(1, 1));
+                    break;
+                } else {
+                    const min = V2(-1 + @intToFloat(f32, i), -1);
+                    const max = V2(0+ @intToFloat(f32, i), 1 );
+                    framebuffer.render_to_screen(window_width, window_height, min, max);
+                }
             }
         }
         SDL_GL_SwapWindow(window);

@@ -264,7 +264,7 @@ pub const Player = struct {
             const other_player = findOther(player.owner);
             transform.* = SpawnPoint.findSpawnPointFarFrom(other_player.dep().getTransform().position);
             const rotated_vector = transform.rotation.mulVec(V3(0, 0, 1));
-            player.yaw = math.atan2(real, rotated_vector.x, rotated_vector.y);
+            player.yaw = math.atan2(real, -rotated_vector.x, -rotated_vector.z);
             player.pitch = 0;
         }
 
@@ -388,6 +388,12 @@ pub const SpawnPoint = struct {
         try spawn_points.append(owner);
     }
 
+    pub fn draw(self: SpawnPoint, owner: *Entity) void {
+        const t = owner.getTransform();
+        Mat4.translation(t.position).mulMat(t.rotation.toMat()).gfxDump();
+    }
+
+
     pub fn remove(owner: EntityID) void {
         for (spawn_points.toSlice()) |id, i| {
             if (!owner.equals(id))
@@ -432,6 +438,7 @@ pub const Component = union(ComponentType) {
     fn draw(self: C, entity: *Entity, program: GFX.Shader) void {
         switch (self) {
             C.drawable => |c| c.draw(entity, program),
+            C.spawn_point => |c| c.draw(entity),
             else => {},
         }
     }

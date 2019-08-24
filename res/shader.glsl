@@ -78,8 +78,8 @@ void main()
         return;
     }
 
-    vec4 shadow_tint = vec4(0.02, 0.01, 0.10 * (sin(time / 8) * 0.5 + 0.5), 1.0);
-    vec4 light_tint = vec4(1.2 * (sin(time / 8) * 0.5 + 0.5), 1.1, 1.0, 1.0);
+    vec4 shadow_tint = vec4(0.02, 0.01, 0.04, 1.0);
+    vec4 light_tint = vec4(1.1, 1.0, 1.0, 1.0);
     vec3 light_dir = vec3(light_rotation[0][2], 
                           light_rotation[1][2],
                           light_rotation[2][2]);
