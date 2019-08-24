@@ -12,9 +12,9 @@ var window_width: i32 = 1600;
 var window_height: i32 = 800;
 var window_aspect_ratio: f32 = undefined;
 
-const DEBUG_CAMERA = false;
-const DISABLE_SPLITSCREEN = true or DEBUG_CAMERA;
-const DEBUG_DRAW = true;
+const DEBUG_CAMERA = true;
+const DISABLE_SPLITSCREEN = false or DEBUG_CAMERA;
+const DEBUG_DRAW = false;
 
 //    - Entity System (pass 1)
 // TODO:
@@ -77,7 +77,7 @@ fn onResize(x: i32, y: i32) void {
 }
 
 fn create_world() void {
-    LevelGen.generate(15,
+    LevelGen.generate(16,
                       ecs,
                       ECS.Drawable{ .mesh = &cube, .texture = &texture, });
 }

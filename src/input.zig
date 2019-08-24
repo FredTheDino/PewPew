@@ -119,6 +119,8 @@ pub fn update() void {
                 const button = event.cbutton.button;
                 const which = event.cbutton.which;
                 const is_down = event.cbutton.state == SDL_PRESSED;
+                if (button == SDL_CONTROLLER_BUTTON_A)
+                    KeyEvent.addController(which);
                 const key_evet = KeyEvent.button(which, button, is_down);
                 process(key_evet);
             },
@@ -148,6 +150,7 @@ pub fn update() void {
                 }
             },
             SDL_JOYDEVICEREMOVED => {
+                KeyEvent.removeController(event.cdevice.which);
             },
             else => {
             },
@@ -160,6 +163,44 @@ const KeyEvent = struct {
     event: Event,
     value: f32,
 
+    const NUM_PLAYERS = 4;
+    var num_active_ctrls: u32 = 0;
+    var player_to_controller: [NUM_PLAYERS]c_int = [_]c_int{0xFF, 0xFF, 0xFF, 0xFF};
+
+    fn addController(controller_id: i32) void {
+        assert(controller_id != 0xFF);
+        if (num_active_ctrls == NUM_PLAYERS) return;
+        // Don't allow duplicates
+        for (player_to_controller) |ctrl| {
+            if (controller_id == ctrl)
+                return;
+        }
+        for (player_to_controller) |ctrl, i| {
+            if (ctrl != 0xFF)
+                continue;
+            player_to_controller[i] = controller_id;
+            num_active_ctrls += 1;
+            return;
+        }
+    }
+
+    fn controllerToPlayer(c: c_int) !PlayerId {
+        for (player_to_controller) |ctrl, i| {
+            if (c == ctrl)
+                return @intCast(PlayerId, i);
+        }
+        return error.NotMappedController;
+    }
+
+    fn removeController(controller_id: c_int) void {
+        for (player_to_controller) |ctrl, i| {
+            if (controller_id != ctrl)
+                continue;
+            player_to_controller[i] = 0xFF;
+            return;
+        }
+    }
+
     fn create(player: PlayerId, event: Event, v: f32) KeyEvent {
         return KeyEvent{
             .player = player,
@@ -168,12 +209,9 @@ const KeyEvent = struct {
         };
     }
 
-    fn controllerToPlayer(c: c_int) PlayerId {
-        return @intCast(PlayerId, @divTrunc(c, 2));
-    }
-
     pub fn button(which: c_int, b: c_int, is_down: bool) KeyEvent {
-        const player = controllerToPlayer(which);
+        const player = controllerToPlayer(which)
+                    catch return create(0, Event.NO_INPUT_EVENT, 0.0);
         // TODO: Support directional buttons???
         const event = switch (b) {
             SDL_CONTROLLER_BUTTON_A => Event.JUMP,
@@ -190,7 +228,8 @@ const KeyEvent = struct {
     }
 
     pub fn axis(which: c_int, a: SDL_GameControllerAxis, motion: f32) KeyEvent {
-        const player = controllerToPlayer(which);
+        const player = controllerToPlayer(which)
+                    catch return create(0, Event.NO_INPUT_EVENT, 0.0);
         const event = switch(a) {
             SDLA_LEFTX => Event.MOVE_X,
             SDLA_LEFTY => Event.MOVE_Y,

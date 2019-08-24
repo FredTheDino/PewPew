@@ -56,22 +56,27 @@ pub const LevelGen = struct {
         },
         ECS.SpawnPoint.create());
 
-        // var x = -size;
-        // while (x < size): (x += 1) {
-        //     var y = -size;
-        //     while (y < size): (y += 1) {
-        //         const p = V3(@intToFloat(f32, x), 0, @intToFloat(f32, y));
-        //         const w = 1.0;
-        //         _ = ecs.create(
-        //         ECS.Transform{
-        //             .position = p,
-        //             .rotation = Quat.identity(),
-        //             .scale = w,
-        //         },
-        //         ECS.Physics.create(V3(2.0 * w, 2.0 * w, 2.0 * w), false),
-        //         drawable);
-        //     }
-        // }
+        const grid_dim: f32 = 4.0;
+        const size_f = @intToFloat(f32, size);
+        var x = -size_f + 0.5 * grid_dim;
+        while (x < size_f): (x += grid_dim) {
+            var y = -size_f + 0.5 * grid_dim;
+            while (y < size_f): (y += grid_dim) {
+                if (math.fabs(x) + math.fabs(y) >= size_f + 0.2 * grid_dim)
+                    continue;
+                if (randReal() < 0.0)
+                    continue;
+                const p = V3(x, 2, y);
+                _ = ecs.create(
+                ECS.Transform{
+                    .position = p,
+                    .rotation = Quat.identity(),
+                    .scale = grid_dim / 2.0,
+                },
+                ECS.Physics.create(V3(grid_dim, grid_dim, grid_dim), false),
+                drawable);
+            }
+        }
     }
 
     pub fn draw(self: LevelGen) void {
